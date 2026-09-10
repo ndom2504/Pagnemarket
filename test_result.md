@@ -146,3 +146,19 @@ frontend:
         agent: "main"
 test_plan:
   current_focus: ["Mobile Money flow", "Supplier dashboard/products", "Upload", "Pour vous"]
+
+## Iteration 3 — Suivi commande, Avis, Alertes stock bas
+backend:
+  - task: "GET /api/orders/{id} (statusHistory + myReviews), statusHistory pushed on status changes, stock decrement on paid orders"
+    file: "backend/server.py, backend/deps.py, backend/routers/payments.py"
+    status_history: [{working: "NA", agent: "main"}]
+  - task: "Reviews: POST /api/reviews (delivered only, once per product/order), GET /api/products/{id}/reviews"
+    file: "backend/routers/reviews.py"
+    status_history: [{working: "NA", agent: "main"}]
+  - task: "GET /api/supplier/alerts (stock < 3)"
+    file: "backend/routers/supplier.py"
+    status_history: [{working: "NA", agent: "main"}]
+frontend:
+  - task: "Order tracking /order/[id], orders list /orders, ReviewSheet, product reviews section, supplier low-stock banner"
+    file: "frontend/app/order/[id].tsx, frontend/app/orders.tsx, frontend/src/components/review-sheet.tsx"
+    status_history: [{working: "NA", agent: "main"}]

@@ -88,7 +88,11 @@ export default function Profile() {
       )}
 
       {/* Orders */}
-      <SectionHead title="Mes commandes récentes" />
+      <SectionHead
+        title="Mes commandes récentes"
+        action={((orders.data as any[]) || []).length > 0 ? "Voir tout" : undefined}
+        onAction={() => router.push("/orders")}
+      />
       {((orders.data as any[]) || []).length === 0 ? (
         <View style={styles.emptyCard}>
           <Icon name="package" size={28} color={colors.muted} />
@@ -104,7 +108,7 @@ export default function Profile() {
       ) : (
         <View style={{ paddingHorizontal: 16, gap: 8 }}>
           {((orders.data as any[]) || []).slice(0, 5).map((o: any) => (
-            <View key={o.id} style={styles.orderRow} testID={`order-${o.id}`}>
+            <Pressable key={o.id} style={styles.orderRow} testID={`order-${o.id}`} onPress={() => router.push(`/order/${o.id}`)}>
               <View style={styles.orderIcon}>
                 <Icon name="package" size={18} color={colors.onBrandPrimary} />
               </View>
@@ -119,7 +123,8 @@ export default function Profile() {
               <View style={[styles.statusPill, { backgroundColor: statusOf(o.status).color }]}>
                 <Text style={styles.statusTxt}>{statusOf(o.status).label}</Text>
               </View>
-            </View>
+              <Icon name="chevron-right" size={16} color={colors.muted} />
+            </Pressable>
           ))}
         </View>
       )}
@@ -141,10 +146,15 @@ export default function Profile() {
   );
 }
 
-function SectionHead({ title }: { title: string }) {
+function SectionHead({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   return (
-    <View style={{ paddingHorizontal: 16, marginTop: 24, marginBottom: 12 }}>
+    <View style={{ paddingHorizontal: 16, marginTop: 24, marginBottom: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
       <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{title}</Text>
+      {action && (
+        <Pressable onPress={onAction} testID="orders-see-all">
+          <Text style={{ color: colors.brandSecondary, fontSize: 13, fontWeight: "500" }}>{action}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

@@ -31,6 +31,8 @@ export default function ProductDetail() {
   const [fav, setFav] = useState(false);
 
   const q = useQuery({ queryKey: ["product", id], queryFn: () => api(`/products/${id}`) });
+  const reviews = useQuery({ queryKey: ["reviews", id], queryFn: () => api(`/products/${id}/reviews`, { auth: false }) });
+  const reviewList: any[] = (reviews.data as any)?.items || [];
   useEffect(() => {
     if (!id) return;
     api("/events/view", { method: "POST", body: JSON.stringify({ productId: id }) })
@@ -146,10 +148,43 @@ export default function ProductDetail() {
           </View>
 
           <View style={styles.attrsGrid}>
-            <Attr label="Stock" value={`${p.stock} pièces`} />
+            <Attr label="Stock" value={p.stock > 0 ? `${p.stock} pièces` : "Rupture"} />
             <Attr label="Origine" value={p.location.split(",")[1]?.trim() || "Afrique"} />
             <Attr label="Catégorie" value={p.category} />
             <Attr label="Devise" value={p.currency} />
+          </View>
+
+          {/* Reviews */}
+          <View testID="reviews-section">
+            <View style={styles.rowBetween}>
+              <Text style={styles.sectionLbl}>Avis des acheteurs</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Icon name="star" size={14} color={colors.brandTertiary} />
+                <Text style={styles.ratingBigText}>{p.rating} · {p.reviewsCount} avis</Text>
+              </View>
+            </View>
+            {reviewList.length === 0 ? (
+              <Text style={styles.noReview}>
+                Pas encore d'avis détaillé. Les acheteurs peuvent noter ce tissu après livraison.
+              </Text>
+            ) : (
+              <View style={{ gap: 10, marginTop: 8 }}>
+                {reviewList.slice(0, 5).map((r: any) => (
+                  <View key={r.id} style={styles.reviewCard} testID={`review-${r.id}`}>
+                    <View style={styles.rowBetween}>
+                      <Text style={styles.reviewUser}>{r.userName}</Text>
+                      <View style={{ flexDirection: "row", gap: 2 }}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <Icon key={n} name="star" size={12} color={n <= r.rating ? colors.brandTertiary : colors.border} />
+                        ))}
+                      </View>
+                    </View>
+                    {r.comment && <Text style={styles.reviewTxt}>{r.comment}</Text>}
+                    <Text style={styles.reviewDate}>{new Date(r.createdAt).toLocaleDateString("fr-FR")} · Achat vérifié</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -292,6 +327,18 @@ const styles = StyleSheet.create({
   },
   attrLbl: { color: colors.muted, fontSize: 11, marginBottom: 4 },
   attrVal: { color: colors.onSurface, fontWeight: "500", fontSize: 13 },
+  noReview: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 6 },
+  reviewCard: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  reviewUser: { fontWeight: "500", color: colors.onSurface, fontSize: 13 },
+  reviewTxt: { color: colors.onSurface, fontSize: 13, lineHeight: 19 },
+  reviewDate: { color: colors.muted, fontSize: 11 },
   ctaBar: {
     position: "absolute",
     bottom: 0,

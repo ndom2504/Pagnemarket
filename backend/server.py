@@ -8,11 +8,12 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
 
-from deps import client, db, create_token, current_user
+from deps import client, db, create_token, current_user, decrement_stock
 from routers import payments as payments_router
 from routers import supplier as supplier_router
 from routers import uploads as uploads_router
 from routers import reco as reco_router
+from routers import reviews as reviews_router
 from routers.payments import OrderDraft, build_order_from_cart
 from storage import init_storage
 
@@ -347,6 +348,7 @@ async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
     # Card payment (simulation) — Mobile Money goes through /payments/mobile-money/init
     order = await build_order_from_cart(user, OrderDraft(**body.model_dump(exclude={"paymentMethod"})), body.paymentMethod)
     await db.orders.insert_one(order.copy())
+    await decrement_stock(order["items"])
     await db.carts.update_one({"userId": user["id"]}, {"$set": {"items": []}})
     order.pop("_id", None)
     return order
@@ -354,6 +356,17 @@ async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
 @api_router.get("/orders")
 async def list_orders(user: dict = Depends(current_user)):
     return await db.orders.find({"userId": user["id"]}, {"_id": 0}).sort("createdAt", -1).to_list(100)
+
+@api_router.get("/orders/{oid}")
+async def get_order(oid: str, user: dict = Depends(current_user)):
+    o = await db.orders.find_one({"id": oid, "userId": user["id"]}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Commande introuvable")
+    if not o.get("statusHistory"):
+        o["statusHistory"] = [{"status": o.get("status", "confirmed"), "at": o.get("createdAt")}]
+    reviews = await db.reviews.find({"userId": user["id"], "orderId": oid}, {"_id": 0}).to_list(50)
+    o["myReviews"] = {r["productId"]: r for r in reviews}
+    return o
 
 # ------------------ MESSAGES ------------------
 
@@ -447,6 +460,17 @@ async def seed_database():
     if await db.categories.count_documents({}) == 0:
         await seed_catalog()
     await seed_demo_orders()
+    # Backfill status timelines for orders created before tracking existed
+    flow = ["confirmed", "processing", "shipped", "delivered"]
+    async for o in db.orders.find({"statusHistory": {"$exists": False}}, {"_id": 1, "status": 1, "createdAt": 1}):
+        st = o.get("status", "confirmed")
+        steps = flow[: flow.index(st) + 1] if st in flow else [st]
+        hist = [{"status": s, "at": o["createdAt"] + timedelta(hours=6 * i)} for i, s in enumerate(steps)]
+        await db.orders.update_one({"_id": o["_id"]}, {"$set": {"statusHistory": hist}})
+    # One-off: a low-stock demo product for the supplier alerts (Wax Pointe Noire -> 2 pièces)
+    if not await db.meta.find_one({"key": "lowstock_demo"}):
+        await db.products.update_one({"supplierId": "v1", "name": "Wax Pointe Noire"}, {"$set": {"stock": 2}})
+        await db.meta.insert_one({"key": "lowstock_demo"})
 
 
 async def seed_demo_orders():
@@ -479,11 +503,15 @@ async def seed_demo_orders():
         created = now - timedelta(days=days_ago, hours=2 if days_ago else 0)
         if days_ago == 0 and created.hour < 2:
             created = now
+        flow = ["confirmed", "processing", "shipped", "delivered"]
+        steps = flow[: flow.index(status) + 1]
+        history = [{"status": st, "at": created + timedelta(hours=6 * i)} for i, st in enumerate(steps)]
         docs.append({
             "id": str(uuid.uuid4()), "userId": buyer["id"], "customerName": "Demo User", "items": items,
             "supplierIds": ["v1"], "total": sum(i["price"] * i["quantity"] for i in items), "currency": "XAF",
             "status": status, "paymentStatus": "paid", "address": "Quartier Louis", "city": "Libreville",
             "country": "Gabon", "phone": "+241 07 00 00 00", "paymentMethod": method, "createdAt": created, "seeded": True,
+            "statusHistory": history,
         })
     await db.orders.insert_many(docs)
     logger.info("Seeded %d demo orders", len(docs))
@@ -627,6 +655,7 @@ api_router.include_router(payments_router.router)
 api_router.include_router(supplier_router.router)
 api_router.include_router(uploads_router.router)
 api_router.include_router(reco_router.router)
+api_router.include_router(reviews_router.router)
 app.include_router(api_router)
 
 app.add_middleware(

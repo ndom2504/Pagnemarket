@@ -62,6 +62,9 @@ export default function SupplierProducts() {
                 <Text numberOfLines={1} style={styles.name}>{item.name}</Text>
                 <Text style={styles.meta}>
                   {item.category} · Stock {item.stock}
+                  {item.stock < 3 ? (
+                    <Text style={styles.lowStock}>{item.stock <= 0 ? "  · Rupture" : "  · Stock bas"}</Text>
+                  ) : null}
                 </Text>
                 <Text style={styles.price}>
                   {formatXAF(item.promoPrice || item.price)}
@@ -125,6 +128,7 @@ const styles = StyleSheet.create({
   img: { width: 64, height: 64, borderRadius: 10, backgroundColor: colors.surfaceSecondary },
   name: { fontSize: 14, fontWeight: "500", color: colors.onSurface },
   meta: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  lowStock: { color: colors.brandSecondary, fontWeight: "500" },
   price: { fontSize: 13, fontWeight: "500", color: colors.onSurface, marginTop: 4 },
   old: { color: colors.muted, textDecorationLine: "line-through", fontWeight: "400", fontSize: 11 },
   actionBtn: {

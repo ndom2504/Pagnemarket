@@ -33,6 +33,12 @@ export default function SupplierDashboard() {
     queryFn: () => api("/supplier/stats"),
     refetchInterval: 30000,
   });
+  const alerts = useQuery({
+    queryKey: ["supplier-alerts"],
+    queryFn: () => api("/supplier/alerts"),
+    refetchInterval: 30000,
+  });
+  const alertItems: any[] = (alerts.data as any)?.items || [];
 
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
@@ -71,6 +77,40 @@ export default function SupplierDashboard() {
           showsVerticalScrollIndicator={false}
           testID="supplier-dashboard"
         >
+          {/* Low stock alerts */}
+          {alertItems.length > 0 && (
+            <View style={styles.alertCard} testID="low-stock-alert">
+              <View style={styles.alertHead}>
+                <View style={styles.alertIcon}>
+                  <Icon name="alert-triangle" size={16} color={colors.onBrandSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.alertTitle}>
+                    {alertItems.length} tissu{alertItems.length > 1 ? "s" : ""} en stock bas
+                  </Text>
+                  <Text style={styles.alertSub}>Moins de {(alerts.data as any).threshold} pièces — réapprovisionnez pour continuer à vendre</Text>
+                </View>
+              </View>
+              {alertItems.map((a) => (
+                <Pressable
+                  key={a.productId}
+                  testID={`alert-${a.productId}`}
+                  style={styles.alertRow}
+                  onPress={() => router.push({ pathname: "/supplier/product-form", params: { id: a.productId } })}
+                >
+                  <Image source={{ uri: a.image }} style={styles.alertImg} contentFit="cover" />
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={styles.alertName}>{a.name}</Text>
+                    <Text style={[styles.alertMsg, a.level === "out" && { color: colors.error }]}>{a.message}</Text>
+                  </View>
+                  <View style={styles.restockBtn}>
+                    <Text style={styles.restockTxt}>Réapprovisionner</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
           {/* Hero KPI */}
           <View style={styles.heroCard}>
             <View style={styles.liveRow}>
@@ -241,6 +281,26 @@ const styles = StyleSheet.create({
   title: { fontSize: 17, fontWeight: "500", color: colors.onSurface },
   subtitle: { fontSize: 12, color: colors.muted, marginTop: 2 },
   heroCard: { backgroundColor: colors.surfaceInverse, borderRadius: 16, padding: 20 },
+  alertCard: {
+    backgroundColor: colors.surfaceTertiary, borderRadius: 16, padding: 14, gap: 10,
+    borderWidth: 1.5, borderColor: colors.brandSecondary,
+  },
+  alertHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  alertIcon: {
+    width: 36, height: 36, borderRadius: 999, backgroundColor: colors.brandSecondary,
+    alignItems: "center", justifyContent: "center",
+  },
+  alertTitle: { fontSize: 14, fontWeight: "500", color: colors.onSurface },
+  alertSub: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  alertRow: {
+    flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: colors.divider,
+  },
+  alertImg: { width: 40, height: 40, borderRadius: 8, backgroundColor: colors.surfaceSecondary },
+  alertName: { fontSize: 13, fontWeight: "500", color: colors.onSurface },
+  alertMsg: { fontSize: 11, color: colors.brandSecondary, fontWeight: "500", marginTop: 2 },
+  restockBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.surfaceInverse },
+  restockTxt: { color: colors.onSurfaceInverse, fontSize: 11, fontWeight: "500" },
   liveRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
   liveDot: { width: 8, height: 8, borderRadius: 999, backgroundColor: colors.brandSecondary },
   liveTxt: { color: colors.onSurfaceInverse, opacity: 0.7, fontSize: 11, letterSpacing: 1.2, fontWeight: "500" },

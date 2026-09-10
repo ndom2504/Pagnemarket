@@ -52,3 +52,23 @@ def public_base_url(request) -> str:
     proto = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
     return f"{proto}://{host}"
+
+
+LOW_STOCK_THRESHOLD = 3  # alert when stock drops under 3 pieces
+
+
+def status_entry(status: str) -> dict:
+    return {"status": status, "at": datetime.now(timezone.utc)}
+
+
+async def push_order_status(order_filter: dict, status: str, extra: dict | None = None):
+    """Set order status and append to its statusHistory timeline."""
+    update = {"$set": {"status": status, "updatedAt": datetime.now(timezone.utc), **(extra or {})},
+              "$push": {"statusHistory": status_entry(status)}}
+    return await db.orders.update_one(order_filter, update)
+
+
+async def decrement_stock(items: list):
+    for it in items:
+        await db.products.update_one({"id": it["productId"]}, {"$inc": {"stock": -int(it.get("quantity", 1))}})
+    await db.products.update_many({"stock": {"$lt": 0}}, {"$set": {"stock": 0}})

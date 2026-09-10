@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from deps import current_user, db, public_base_url
+from deps import current_user, db, decrement_stock, public_base_url, push_order_status, status_entry
 
 logger = logging.getLogger("pagnemarket.payments")
 router = APIRouter()
@@ -93,6 +93,7 @@ async def build_order_from_cart(user: dict, body: OrderDraft, payment_method: st
         "country": body.country,
         "phone": body.phone,
         "paymentMethod": payment_method,
+        "statusHistory": [status_entry("confirmed")],
         "createdAt": datetime.now(timezone.utc),
     }
 
@@ -104,16 +105,16 @@ async def mark_order_paid(payment: dict):
         {"$set": {"status": "PAID", "updatedAt": now}},
     )
     if res.modified_count:
-        await db.orders.update_one(
-            {"id": payment["orderId"]},
-            {"$set": {"paymentStatus": "paid", "status": "confirmed", "paidAt": now}},
-        )
+        await push_order_status({"id": payment["orderId"]}, "confirmed", {"paymentStatus": "paid", "paidAt": now})
+        order = await db.orders.find_one({"id": payment["orderId"]}, {"_id": 0, "items": 1})
+        if order:
+            await decrement_stock(order.get("items", []))
         await db.carts.update_one({"userId": payment["userId"]}, {"$set": {"items": []}})
 
 
 async def mark_order_failed(payment: dict):
     await db.payments.update_one({"transactionId": payment["transactionId"]}, {"$set": {"status": "FAILED"}})
-    await db.orders.update_one({"id": payment["orderId"]}, {"$set": {"paymentStatus": "failed", "status": "cancelled"}})
+    await push_order_status({"id": payment["orderId"]}, "cancelled", {"paymentStatus": "failed"})
 
 
 async def verify_with_cinetpay(cfg: dict, transaction_id: str) -> dict:
@@ -154,6 +155,7 @@ async def init_mobile_money(body: MobileMoneyInit, request: Request, user: dict 
     order = await build_order_from_cart(user, body, f"mobile_money_{body.operator}")
     order["status"] = "pending_payment"
     order["paymentStatus"] = "pending"
+    order["statusHistory"] = [status_entry("pending_payment")]
     await db.orders.insert_one(order.copy())
 
     country_code, currency = COUNTRY_CODES.get(body.country.strip().lower(), ("CI", "XOF"))
@@ -205,7 +207,7 @@ async def init_mobile_money(body: MobileMoneyInit, request: Request, user: dict 
             result = {}
         if str(result.get("code")) != "201":
             logger.error("CinetPay init failed: %s", result)
-            await db.orders.update_one({"id": order["id"]}, {"$set": {"paymentStatus": "failed", "status": "cancelled"}})
+            await push_order_status({"id": order["id"]}, "cancelled", {"paymentStatus": "failed"})
             raise HTTPException(502, result.get("description") or "Initialisation du paiement Mobile Money échouée")
         payment["paymentUrl"] = result["data"]["payment_url"]
         payment["paymentToken"] = result["data"].get("payment_token")

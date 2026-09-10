@@ -6,7 +6,7 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from deps import current_supplier, db
+from deps import LOW_STOCK_THRESHOLD, current_supplier, db, push_order_status
 
 router = APIRouter()
 
@@ -92,7 +92,7 @@ async def supplier_stats(user: dict = Depends(current_supplier)):
 
     top = sorted(product_sales.values(), key=lambda x: x["quantity"], reverse=True)[:5]
     products_count = await db.products.count_documents({"supplierId": sid})
-    low_stock = await db.products.count_documents({"supplierId": sid, "stock": {"$lte": 3}})
+    low_stock = await db.products.count_documents({"supplierId": sid, "stock": {"$lt": LOW_STOCK_THRESHOLD}})
 
     return {
         "revenueToday": revenue_today,
@@ -106,6 +106,30 @@ async def supplier_stats(user: dict = Depends(current_supplier)):
         "topProducts": top,
         "recentOrders": [supplier_view(o, sid) for o in orders[:5]],
         "currency": "XAF",
+    }
+
+
+@router.get("/supplier/alerts")
+async def supplier_alerts(user: dict = Depends(current_supplier)):
+    """In-app alerts: fabrics whose stock dropped under the threshold (out of stock first)."""
+    products = await db.products.find(
+        {"supplierId": user["id"], "stock": {"$lt": LOW_STOCK_THRESHOLD}},
+        {"_id": 0, "id": 1, "name": 1, "images": 1, "stock": 1, "category": 1},
+    ).sort("stock", 1).to_list(200)
+    return {
+        "threshold": LOW_STOCK_THRESHOLD,
+        "count": len(products),
+        "items": [
+            {
+                "productId": p["id"],
+                "name": p["name"],
+                "image": (p.get("images") or [None])[0],
+                "stock": p["stock"],
+                "level": "out" if p["stock"] <= 0 else "low",
+                "message": "Rupture de stock" if p["stock"] <= 0 else f"Plus que {p['stock']} pièce{'s' if p['stock'] > 1 else ''}",
+            }
+            for p in products
+        ],
     }
 
 
@@ -166,10 +190,7 @@ async def supplier_orders(user: dict = Depends(current_supplier)):
 
 @router.patch("/supplier/orders/{oid}/status")
 async def update_order_status(oid: str, body: StatusIn, user: dict = Depends(current_supplier)):
-    res = await db.orders.update_one(
-        {"id": oid, "supplierIds": user["id"]},
-        {"$set": {"status": body.status, "updatedAt": datetime.now(timezone.utc)}},
-    )
+    res = await push_order_status({"id": oid, "supplierIds": user["id"]}, body.status)
     if res.matched_count == 0:
         raise HTTPException(404, "Commande introuvable")
     o = await db.orders.find_one({"id": oid}, {"_id": 0})
