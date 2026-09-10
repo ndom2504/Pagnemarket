@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 2 (PagneMarket) fully passes. Backend: 19/19 pytest cases green in tests/test_iteration2.py (supplier login role+shopName, /api/supplier/stats shape + 403 for buyer, product CRUD with promoPrice/images validation, orders list + invalid status 422, /api/uploads/image PNG success + non-image 400, /api/payments/config -> 'simulation', /api/payments/mobile-money/init empty-cart 400 + invalid operator 422 + full simulation flow reaching PAID after ~7s clearing cart and marking order paid+confirmed, /api/recommendations empty for new user and non-empty with basis.topCategory after views, /api/products carries supplierId/supplierName with no legacy vendor* fields). Frontend (Expo web preview, 390x844): supplier login shows 'Fournisseur' pill on Profile + 'Espace fournisseur' card (testID supplier-space), dashboard renders KPI (kpi-revenue-today=40 100 FCFA, kpi-in-progress, kpi-orders, kpi-products), 7-day chart, Top tissus and 5 order-row-* items. Tapping first order opens status sheet, status-processing updates pill (pill switches to 'En préparation'). FAB fab-add-product opens /supplier/product-form with input-name, input-price, input-stock, input-description, cat-wax/bazin/kente/bogolan chips, photo-add opens sheet with source-camera + source-gallery. Publier button is disabled (opacity 0.5) without a photo. /supplier/products lists supplier-owned items with 3 edit-*/delete-* pairs. Buyer flow: /auth registration shows role-buyer/role-supplier/role-tailor with correct French labels; choosing role-supplier reveals input-shopName. Buyer login -> product view -> home displays 'Pour vous' row (for-you-row + for-you-* cards). add-to-cart -> /cart -> checkout: Mobile Money selected by default, operator-orange/mtn/moov + input-momo-phone present alongside pay-card; filling address+phone+momoPhone and tapping place-order shows momo-pending screen ('Confirmez sur votre téléphone', OM badge, mode démo indicator), then after ~10s auto-transitions to 'Merci pour votre commande !' with done-back. Mocked as expected: Mobile Money in simulation mode (CINETPAY_APIKEY empty) and card payment simulation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iteration2_results.xml"
+  ],
+  "action_items": [
+    "Optional: review request mentioned btn-save on product form; the actual testID is 'save-product'. Either update the review checklist or add an alias — not blocking.",
+    "Optional: seed some product views for the supplier product 'Wax Fleur d'Hibiscus' pre-shown in 'Pour vous' to be tied to the current user's history (currently items appear for demo user because prior test runs left views/favorites for that user)."
+  ],
+  "critical_code_review_comments": [
+    "routers/payments.py — Simulation timer uses payment['createdAt'].replace(tzinfo=timezone.utc); MongoDB returns tz-aware datetimes so replace() is a no-op safe fallback, works correctly (verified with 7s poll).",
+    "routers/supplier.py — supplier_lines/supplier_view correctly filter to only lines owned by the current supplier; totals recomputed per-supplier, preventing revenue leakage across suppliers.",
+    "routers/uploads.py — Uses Emergent Object Storage put_object; caches downloads with immutable Cache-Control. GET /files/{id} is intentionally public (marketplace photos). Good.",
+    "routers/reco.py — Empty seed_ids returns items:[] and basis:None as expected. Category weighting and rating boost are reasonable; tag_w uses partial weight to avoid single-tag domination.",
+    "backend/server.py — deps.public_base_url likely honours forwarded proto/host from ingress; confirmed the uploaded image URL returned by /api/uploads/image resolves to the public tissue-hub-8 domain and returns image/png.",
+    "frontend/app/checkout.tsx — Poll interval 3s with tick cap 100 gives ~5 minutes max, sensible. Cancel via momo-cancel clears pending state correctly. finish() invalidates cart+orders queries."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration2.py (new)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "100% (all critical flows)"},
+  "seed_data_creation": "Created and deleted one TEST_ supplier product during CRUD test; created one TEST_reco_* buyer via register; uploaded one small PNG (persisted in db.files + object storage). Simulated one Mobile Money order via demo buyer (order remains in demo's history with paymentStatus paid).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "BASE_URL from frontend/.env EXPO_PUBLIC_BACKEND_URL. Run new tests with: pytest /app/backend/tests/test_iteration2.py -v --tb=short -o addopts=''. The full mobile-money simulation test sleeps ~7.5s to observe PAID transition. Frontend: supplier flow uses testIDs kpi-revenue-today, kpi-in-progress, kpi-orders, kpi-products, order-row-{id}, status-{state}, fab-add-product, photo-add, source-camera, source-gallery, save button is 'save-product' (not 'btn-save'). Checkout Mobile Money uses momo-pending screen with mode démo auto-confirm at 6s server-side plus 3s poll = observed at ~9-10s. Ignore web-only warnings about pointerEvents & Unsplash ORB image blocking.",
+  "rca_of_issue": "N/A"
+}

@@ -1,36 +1,30 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from dotenv import load_dotenv
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
 import logging
-from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
-import jwt
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+from deps import client, db, create_token, current_user
+from routers import payments as payments_router
+from routers import supplier as supplier_router
+from routers import uploads as uploads_router
+from routers import reco as reco_router
+from routers.payments import OrderDraft, build_order_from_cart
+from storage import init_storage
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-JWT_SECRET = os.environ.get("JWT_SECRET", "pagnemarket-secret-key-change-me-2026")
-JWT_ALG = "HS256"
-JWT_EXP_DAYS = 30
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("pagnemarket")
 
 app = FastAPI(title="PagneMarket API")
 api_router = APIRouter(prefix="/api")
-security = HTTPBearer(auto_error=False)
 
 # ------------------ MODELS ------------------
 
-RoleT = Literal["buyer", "vendor", "tailor", "admin"]
+RoleT = Literal["buyer", "supplier", "tailor", "admin"]
 
 class UserRegister(BaseModel):
     firstName: str
@@ -41,6 +35,7 @@ class UserRegister(BaseModel):
     country: Optional[str] = "Gabon"
     city: Optional[str] = None
     role: RoleT = "buyer"
+    shopName: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -56,6 +51,7 @@ class UserOut(BaseModel):
     city: Optional[str] = None
     roles: List[str]
     avatar: Optional[str] = None
+    shopName: Optional[str] = None
     createdAt: datetime
 
 class AuthResponse(BaseModel):
@@ -78,8 +74,8 @@ class Product(BaseModel):
     promoPrice: Optional[float] = None
     stock: int = 10
     images: List[str] = []
-    vendorId: str
-    vendorName: str
+    supplierId: str
+    supplierName: str
     location: str = "Libreville, Gabon"
     rating: float = 4.6
     reviewsCount: int = 0
@@ -152,13 +148,6 @@ def verify_password(pw: str, hashed: str) -> bool:
     except Exception:
         return False
 
-def create_token(uid: str) -> str:
-    payload = {
-        "sub": uid,
-        "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXP_DAYS),
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
-
 def user_public(u: dict) -> dict:
     return {
         "id": u["id"],
@@ -170,21 +159,9 @@ def user_public(u: dict) -> dict:
         "city": u.get("city"),
         "roles": u.get("roles", ["buyer"]),
         "avatar": u.get("avatar"),
+        "shopName": u.get("shopName"),
         "createdAt": u.get("createdAt", datetime.now(timezone.utc)),
     }
-
-async def current_user(cred: HTTPAuthorizationCredentials = Depends(security)) -> dict:
-    if not cred:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(cred.credentials, JWT_SECRET, algorithms=[JWT_ALG])
-        uid = payload.get("sub")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = await db.users.find_one({"id": uid}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
 
 # ------------------ AUTH ROUTES ------------------
 
@@ -205,6 +182,7 @@ async def register(body: UserRegister):
         "city": body.city,
         "roles": [body.role],
         "avatar": None,
+        "shopName": body.shopName,
         "createdAt": datetime.now(timezone.utc),
     }
     await db.users.insert_one(user_doc)
@@ -366,40 +344,8 @@ async def toggle_fav(body: FavToggle, user: dict = Depends(current_user)):
 
 @api_router.post("/orders")
 async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
-    cart = await db.carts.find_one({"userId": user["id"]}) or {"items": []}
-    if not cart.get("items"):
-        raise HTTPException(400, "Panier vide")
-    items = []
-    total = 0.0
-    for it in cart["items"]:
-        p = await db.products.find_one({"id": it["productId"]}, {"_id": 0})
-        if p:
-            price = p.get("promoPrice") or p["price"]
-            line_total = price * it["quantity"]
-            total += line_total
-            items.append({
-                "productId": p["id"],
-                "name": p["name"],
-                "image": p["images"][0] if p.get("images") else None,
-                "quantity": it["quantity"],
-                "price": price,
-                "vendorName": p.get("vendorName"),
-            })
-    order = {
-        "id": str(uuid.uuid4()),
-        "userId": user["id"],
-        "items": items,
-        "total": total,
-        "currency": "XAF",
-        "status": "confirmed",
-        "paymentStatus": "paid",
-        "address": body.address,
-        "city": body.city,
-        "country": body.country,
-        "phone": body.phone,
-        "paymentMethod": body.paymentMethod,
-        "createdAt": datetime.now(timezone.utc),
-    }
+    # Card payment (simulation) — Mobile Money goes through /payments/mobile-money/init
+    order = await build_order_from_cart(user, OrderDraft(**body.model_dump(exclude={"paymentMethod"})), body.paymentMethod)
     await db.orders.insert_one(order.copy())
     await db.carts.update_one({"userId": user["id"]}, {"$set": {"items": []}})
     order.pop("_id", None)
@@ -475,8 +421,75 @@ async def seed_database():
         })
         logger.info("Demo user seeded: %s", demo_email)
 
-    if await db.categories.count_documents({}) > 0:
+    # Demo supplier (owns "Maison Adjoua" products, id v1)
+    supplier_email = "fournisseur@pagnemarket.com"
+    if not await db.users.find_one({"email": supplier_email}):
+        await db.users.insert_one({
+            "id": "v1",
+            "firstName": "Adjoua",
+            "lastName": "Kouassi",
+            "email": supplier_email,
+            "phone": "+241 06 00 00 00",
+            "passwordHash": hash_password("Fournisseur1234!"),
+            "country": "Gabon",
+            "city": "Libreville",
+            "roles": ["supplier"],
+            "shopName": "Maison Adjoua",
+            "avatar": None,
+            "createdAt": datetime.now(timezone.utc),
+        })
+        logger.info("Demo supplier seeded: %s", supplier_email)
+
+    # Migration vendor -> supplier (naming change)
+    await db.users.update_many({"roles": "vendor"}, {"$set": {"roles.$": "supplier"}})
+    await db.products.update_many({"vendorId": {"$exists": True}}, {"$rename": {"vendorId": "supplierId", "vendorName": "supplierName"}})
+
+    if await db.categories.count_documents({}) == 0:
+        await seed_catalog()
+    await seed_demo_orders()
+
+
+async def seed_demo_orders():
+    """A few paid orders for the demo supplier so the dashboard has data (idempotent)."""
+    if await db.orders.count_documents({"seeded": True}) > 0:
         return
+    buyer = await db.users.find_one({"email": "demo@pagnemarket.com"}, {"_id": 0})
+    products = await db.products.find({"supplierId": "v1"}, {"_id": 0}).to_list(10)
+    if not buyer or not products:
+        return
+    now = datetime.now(timezone.utc)
+    plan = [
+        (0, [(0, 2)], "confirmed", "mobile_money_orange"),
+        (0, [(1, 1)], "processing", "card"),
+        (1, [(0, 1), (2, 1)], "shipped", "mobile_money_mtn"),
+        (2, [(2, 3)], "delivered", "mobile_money_moov"),
+        (4, [(1, 2)], "delivered", "card"),
+        (6, [(0, 1)], "delivered", "mobile_money_orange"),
+    ]
+    docs = []
+    for days_ago, lines, status, method in plan:
+        items = []
+        for idx, qty in lines:
+            p = products[idx % len(products)]
+            items.append({
+                "productId": p["id"], "name": p["name"], "image": p["images"][0] if p.get("images") else None,
+                "quantity": qty, "price": p.get("promoPrice") or p["price"], "category": p["category"],
+                "supplierId": "v1", "supplierName": p["supplierName"],
+            })
+        created = now - timedelta(days=days_ago, hours=2 if days_ago else 0)
+        if days_ago == 0 and created.hour < 2:
+            created = now
+        docs.append({
+            "id": str(uuid.uuid4()), "userId": buyer["id"], "customerName": "Demo User", "items": items,
+            "supplierIds": ["v1"], "total": sum(i["price"] * i["quantity"] for i in items), "currency": "XAF",
+            "status": status, "paymentStatus": "paid", "address": "Quartier Louis", "city": "Libreville",
+            "country": "Gabon", "phone": "+241 07 00 00 00", "paymentMethod": method, "createdAt": created, "seeded": True,
+        })
+    await db.orders.insert_many(docs)
+    logger.info("Seeded %d demo orders", len(docs))
+
+
+async def seed_catalog():
     logger.info("Seeding PagneMarket database…")
     categories = [
         {"id": str(uuid.uuid4()), "slug": "wax", "name": "Pagne Wax", "image": "https://images.unsplash.com/photo-1552710307-537199cd41c0?w=600&q=80"},
@@ -488,7 +501,7 @@ async def seed_database():
     ]
     await db.categories.insert_many([c.copy() for c in categories])
 
-    vendors = [
+    suppliers = [
         {"id": "v1", "name": "Maison Adjoua"},
         {"id": "v2", "name": "Sahel Textiles"},
         {"id": "v3", "name": "Cotonou Fabric House"},
@@ -525,7 +538,7 @@ async def seed_database():
     ]
     products = []
     for i, (nm, cat, price) in enumerate(names):
-        vendor = vendors[i % len(vendors)]
+        supplier = suppliers[i % len(suppliers)]
         products.append({
             "id": str(uuid.uuid4()),
             "name": nm,
@@ -536,8 +549,8 @@ async def seed_database():
             "promoPrice": float(price * 0.85) if i % 4 == 0 else None,
             "stock": 15 + i,
             "images": [fabric_images[i % len(fabric_images)], fabric_images[(i + 3) % len(fabric_images)]],
-            "vendorId": vendor["id"],
-            "vendorName": vendor["name"],
+            "supplierId": supplier["id"],
+            "supplierName": supplier["name"],
             "location": locations[i % len(locations)],
             "rating": round(4.3 + (i % 5) * 0.12, 2),
             "reviewsCount": 20 + i * 3,
@@ -610,6 +623,10 @@ async def seed_database():
 async def root():
     return {"app": "PagneMarket", "status": "ok"}
 
+api_router.include_router(payments_router.router)
+api_router.include_router(supplier_router.router)
+api_router.include_router(uploads_router.router)
+api_router.include_router(reco_router.router)
 app.include_router(api_router)
 
 app.add_middleware(
@@ -620,12 +637,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("pagnemarket")
-
 @app.on_event("startup")
 async def on_startup():
     await seed_database()
+    try:
+        await run_in_threadpool(init_storage)
+        logger.info("Object storage ready")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Object storage init failed: %s", e)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

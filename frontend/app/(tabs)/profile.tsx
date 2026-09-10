@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
+import { PAYMENT_LABEL, statusOf } from "@/src/order-status";
 import { colors } from "@/src/theme";
 
 const AVATAR =
@@ -23,6 +24,7 @@ export default function Profile() {
   const { user, signOut } = useAuth();
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api("/orders"), enabled: !!user });
   const favs = useQuery({ queryKey: ["favorites"], queryFn: () => api("/favorites"), enabled: !!user });
+  const isSupplier = !!user?.roles?.includes("supplier");
 
   const handleSignOut = async () => {
     await signOut();
@@ -45,7 +47,7 @@ export default function Profile() {
             {(user?.roles || []).map((r) => (
               <View key={r} style={styles.rolePill}>
                 <Text style={styles.roleText}>
-                  {r === "buyer" ? "Acheteur" : r === "vendor" ? "Vendeur" : r === "tailor" ? "Tailleur" : r}
+                  {r === "buyer" ? "Acheteur" : r === "supplier" ? "Fournisseur" : r === "tailor" ? "Tailleur" : r}
                 </Text>
               </View>
             ))}
@@ -70,6 +72,20 @@ export default function Profile() {
           <Text style={styles.statLabel}>Ville</Text>
         </View>
       </View>
+
+      {/* Supplier space */}
+      {isSupplier && (
+        <Pressable testID="supplier-space" style={styles.supplierCard} onPress={() => router.push("/supplier")}>
+          <View style={styles.supplierIcon}>
+            <Icon name="bar-chart-2" size={20} color={colors.onBrandSecondary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.supplierTitle}>Espace fournisseur</Text>
+            <Text style={styles.supplierSub}>Ventes du jour, commandes en cours, vos tissus</Text>
+          </View>
+          <Icon name="chevron-right" size={18} color={colors.onSurfaceInverse} />
+        </Pressable>
+      )}
 
       {/* Orders */}
       <SectionHead title="Mes commandes récentes" />
@@ -97,8 +113,11 @@ export default function Profile() {
                   {o.items.length} article{o.items.length > 1 ? "s" : ""} · {formatXAF(o.total)}
                 </Text>
                 <Text style={styles.orderMeta}>
-                  {new Date(o.createdAt).toLocaleDateString("fr-FR")} · {o.status}
+                  {new Date(o.createdAt).toLocaleDateString("fr-FR")} · {PAYMENT_LABEL[o.paymentMethod] || o.paymentMethod}
                 </Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: statusOf(o.status).color }]}>
+                <Text style={styles.statusTxt}>{statusOf(o.status).label}</Text>
               </View>
             </View>
           ))}
@@ -108,6 +127,9 @@ export default function Profile() {
       {/* Menu */}
       <SectionHead title="Compte" />
       <View style={{ paddingHorizontal: 16, gap: 4 }}>
+        {isSupplier && (
+          <MenuRow icon="layers" label="Mes tissus" onPress={() => router.push("/supplier/products")} testID="menu-supplier-products" />
+        )}
         <MenuRow icon="heart" label="Mes favoris" onPress={() => router.push("/(tabs)/shop")} testID="menu-favs" />
         <MenuRow icon="shopping-bag" label="Mon panier" onPress={() => router.push("/cart")} testID="menu-cart" />
         <MenuRow icon="map-pin" label="Mes adresses" onPress={() => {}} testID="menu-addresses" />
@@ -229,6 +251,28 @@ const styles = StyleSheet.create({
   },
   orderTitle: { fontWeight: "500", color: colors.onSurface, fontSize: 13 },
   orderMeta: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  statusTxt: { color: colors.onSurfaceInverse, fontSize: 10, fontWeight: "500" },
+  supplierCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceInverse,
+  },
+  supplierIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    backgroundColor: colors.brandSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  supplierTitle: { color: colors.onSurfaceInverse, fontWeight: "500", fontSize: 15 },
+  supplierSub: { color: colors.onSurfaceInverse, opacity: 0.7, fontSize: 12, marginTop: 2 },
   menuRow: {
     flexDirection: "row",
     alignItems: "center",

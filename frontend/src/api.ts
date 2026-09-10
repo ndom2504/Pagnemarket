@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { storage } from "@/src/utils/storage";
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL as string;
@@ -42,4 +43,26 @@ export async function api<T = any>(
 
 export function formatXAF(n: number): string {
   return `${Math.round(n).toLocaleString("fr-FR")} FCFA`;
+}
+
+export async function uploadImage(asset: { uri: string; fileName?: string | null; mimeType?: string | null }) {
+  const t = await loadToken();
+  const name = asset.fileName || `photo-${Date.now()}.jpg`;
+  const type = asset.mimeType || "image/jpeg";
+  const form = new FormData();
+  if (Platform.OS === "web") {
+    const blob = await (await fetch(asset.uri)).blob();
+    form.append("file", blob, name);
+  } else {
+    form.append("file", { uri: asset.uri, name, type } as any);
+  }
+  const res = await fetch(`${BASE_URL}/api/uploads/image`, {
+    method: "POST",
+    headers: t ? { Authorization: `Bearer ${t}` } : undefined,
+    body: form,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error((data && data.detail) || `Erreur ${res.status}`);
+  return data as { id: string; url: string };
 }

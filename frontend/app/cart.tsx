@@ -75,7 +75,7 @@ export default function Cart() {
                   <Image source={{ uri: p.images?.[0] }} style={styles.itemImg} contentFit="cover" />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.itemName} numberOfLines={1}>{p.name}</Text>
-                    <Text style={styles.itemVendor}>{p.vendorName}</Text>
+                    <Text style={styles.itemVendor}>{p.supplierName}</Text>
                     <Text style={styles.itemPrice}>{formatXAF(it.lineTotal)}</Text>
                     <View style={styles.qtyRow}>
                       <Pressable

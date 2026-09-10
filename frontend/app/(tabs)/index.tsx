@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
 
@@ -22,10 +23,18 @@ const HERO_IMG =
 export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const categories = useQuery({ queryKey: ["categories"], queryFn: () => api("/categories") });
   const trending = useQuery({ queryKey: ["trending"], queryFn: () => api("/products/trending") });
   const creators = useQuery({ queryKey: ["creators"], queryFn: () => api("/creators") });
   const models = useQuery({ queryKey: ["models"], queryFn: () => api("/models") });
+  const reco = useQuery({
+    queryKey: ["recommendations"],
+    queryFn: () => api("/recommendations"),
+    enabled: !!user,
+  });
+  const recoItems: any[] = (reco.data as any)?.items || [];
+  const recoBasis = (reco.data as any)?.basis;
 
   return (
     <ScrollView
@@ -104,6 +113,50 @@ export default function Home() {
         />
       )}
 
+      {/* For you */}
+      {recoItems.length > 0 && (
+        <>
+          <SectionTitle
+            title="Pour vous"
+            subtitle={
+              recoBasis?.topCategory
+                ? `Inspiré de vos ${recoBasis.favorites ? "favoris" : "visites"} · ${recoBasis.topCategory}`
+                : "Basé sur vos favoris et vos visites"
+            }
+          />
+          <FlatList
+            horizontal
+            data={recoItems}
+            keyExtractor={(i: any) => i.id}
+            contentContainerStyle={styles.chipsRow}
+            showsHorizontalScrollIndicator={false}
+            testID="for-you-row"
+            renderItem={({ item }: any) => (
+              <Pressable
+                testID={`for-you-${item.id}`}
+                style={styles.recoCard}
+                onPress={() => router.push(`/product/${item.id}`)}
+              >
+                <Image source={{ uri: item.images?.[0] }} style={styles.recoImg} contentFit="cover" />
+                <LinearGradient
+                  colors={["transparent", "rgba(17,17,17,0.9)"]}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.recoTag}>
+                  <Icon name="zap" size={10} color={colors.onBrandTertiary} />
+                  <Text style={styles.recoTagTxt}>Pour vous</Text>
+                </View>
+                <View style={styles.recoInfo}>
+                  <Text numberOfLines={1} style={styles.recoName}>{item.name}</Text>
+                  <Text style={styles.recoMeta}>{item.supplierName}</Text>
+                  <Text style={styles.recoPrice}>{formatXAF(item.promoPrice || item.price)}</Text>
+                </View>
+              </Pressable>
+            )}
+          />
+        </>
+      )}
+
       {/* Trending */}
       <SectionTitle title="Tendances du moment" action="Voir tout" onAction={() => router.push("/(tabs)/shop")} />
       {trending.isLoading ? (
@@ -129,7 +182,7 @@ export default function Home() {
               )}
               <View style={{ padding: 12 }}>
                 <Text numberOfLines={1} style={styles.prodName}>{item.name}</Text>
-                <Text style={styles.prodVendor}>{item.vendorName}</Text>
+                <Text style={styles.prodVendor}>{item.supplierName}</Text>
                 <View style={styles.prodBottom}>
                   <Text style={styles.prodPrice}>{formatXAF(item.promoPrice || item.price)}</Text>
                   <View style={styles.rating}>
@@ -194,10 +247,13 @@ export default function Home() {
   );
 }
 
-function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+function SectionTitle({ title, subtitle, action, onAction }: { title: string; subtitle?: string; action?: string; onAction?: () => void }) {
   return (
     <View style={styles.sectionHead}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {subtitle && <Text style={styles.sectionSub}>{subtitle}</Text>}
+      </View>
       {action && (
         <Pressable onPress={onAction}>
           <Text style={styles.sectionAction}>{action}</Text>
@@ -255,8 +311,35 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: { fontSize: 20, fontWeight: "500", color: colors.onSurface, letterSpacing: -0.5 },
+  sectionSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   sectionAction: { color: colors.brandSecondary, fontSize: 13, fontWeight: "500" },
   chipsRow: { paddingHorizontal: 20, gap: 12 },
+  recoCard: {
+    width: 170,
+    height: 230,
+    borderRadius: 12,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+    backgroundColor: colors.surfaceSecondary,
+  },
+  recoImg: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  recoTag: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.brandTertiary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  recoTagTxt: { color: colors.onBrandTertiary, fontSize: 10, fontWeight: "500" },
+  recoInfo: { padding: 12 },
+  recoName: { color: colors.onSurfaceInverse, fontSize: 14, fontWeight: "500" },
+  recoMeta: { color: colors.onSurfaceInverse, opacity: 0.75, fontSize: 11, marginTop: 2 },
+  recoPrice: { color: colors.onSurfaceInverse, fontSize: 13, fontWeight: "500", marginTop: 6 },
   catCard: {
     width: 130,
     height: 160,

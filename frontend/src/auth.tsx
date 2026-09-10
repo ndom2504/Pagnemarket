@@ -11,6 +11,7 @@ export type User = {
   city?: string;
   roles: string[];
   avatar?: string;
+  shopName?: string;
 };
 
 type Ctx = {

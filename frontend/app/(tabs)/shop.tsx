@@ -148,7 +148,7 @@ export default function Shop() {
                 <Text numberOfLines={1} style={styles.cardName}>
                   {item.name}
                 </Text>
-                <Text style={styles.cardVendor}>{item.vendorName}</Text>
+                <Text style={styles.cardVendor}>{item.supplierName}</Text>
                 <View style={styles.cardBottom}>
                   <Text style={styles.cardPrice}>
                     {formatXAF(item.promoPrice || item.price)}

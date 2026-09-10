@@ -20,11 +20,24 @@ Marketplace mobile premium dédiée aux tissus pagne africains, aux modèles et 
 - Backend: FastAPI + Motor (MongoDB), JWT (pyjwt) + bcrypt.
 - Devise: FCFA (XAF), langue: Français.
 
+## Itération 2 (Livré)
+11. **Fournisseur** (ex-« vendeur ») – rôle `supplier`, champ `shopName`, produits avec `supplierId/supplierName`.
+12. **Espace fournisseur** – `/supplier` : ventes du jour en direct, commandes en cours, CA total, graphique 7 jours, top tissus, commandes récentes avec changement de statut (Confirmée → En préparation → Expédiée → Livrée / Annulée). `/supplier/products` (liste, édition, suppression), `/supplier/product-form` (création/édition).
+13. **Photos fournisseur** – PhotoPicker caméra/galerie (expo-image-picker) avec flux permissions (explication → demande → réglages), upload via Emergent Object Storage (`POST /api/uploads/image`, `GET /api/files/{id}`).
+14. **Mobile Money** – Orange / MTN / Moov via CinetPay (`routers/payments.py`) : init → page opérateur → polling statut → webhook. **Mode simulation automatique** tant que `CINETPAY_APIKEY` et `CINETPAY_SITE_ID` sont vides dans `backend/.env` (PAID après ~6 s).
+15. **Pour vous** – recommandations personnalisées (`GET /api/recommendations`) basées sur les vues (`POST /api/events/view`) et les favoris ; rangée dédiée sur l'accueil.
+
+## Backend structure
+- `deps.py` (db, JWT, current_user/current_supplier), `storage.py` (Object Storage), `routers/{payments,supplier,uploads,reco}.py`, `server.py` (auth, catalogue, panier, favoris, commandes, messages, seed).
+
+## Comptes démo
+- Acheteur : demo@pagnemarket.com / Demo1234!
+- Fournisseur : fournisseur@pagnemarket.com / Fournisseur1234! (Maison Adjoua)
+
 ## Business Enhancement Suggéré
 Système de commission marketplace (10% configurable) déjà supporté côté modèle de données → prêt à activer une "marketplace fee" pour monétiser dès le premier volume de commandes.
 
-## Non-inclus dans le MVP
-- Paiement Stripe réel (mocké)
+## Non-inclus / à venir
+- Paiement carte réel (mocké) ; Mobile Money réel nécessite les clés CinetPay (APIKEY + SITE_ID)
 - Notifications push
 - Dashboard admin web
-- Upload photos vendeurs (images de démo Unsplash)

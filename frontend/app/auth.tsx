@@ -31,7 +31,8 @@ export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [city, setCity] = useState("");
-  const [role, setRole] = useState<"buyer" | "vendor" | "tailor">("buyer");
+  const [shopName, setShopName] = useState("");
+  const [role, setRole] = useState<"buyer" | "supplier" | "tailor">("buyer");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -50,9 +51,10 @@ export default function AuthScreen() {
           city: city.trim(),
           country: "Gabon",
           role,
+          shopName: role === "supplier" && shopName.trim() ? shopName.trim() : undefined,
         });
       }
-      router.replace("/(tabs)");
+      router.replace(role === "supplier" && mode === "register" ? "/supplier" : "/(tabs)");
     } catch (e: any) {
       setErr(e.message || "Une erreur est survenue");
     } finally {
@@ -135,7 +137,7 @@ export default function AuthScreen() {
                 onChangeText={setCity}
               />
               <View style={styles.rolesRow}>
-                {(["buyer", "vendor", "tailor"] as const).map((r) => (
+                {(["buyer", "supplier", "tailor"] as const).map((r) => (
                   <Pressable
                     key={r}
                     testID={`role-${r}`}
@@ -145,11 +147,21 @@ export default function AuthScreen() {
                     <Text
                       style={[styles.roleText, role === r && styles.roleTextActive]}
                     >
-                      {r === "buyer" ? "Acheteur" : r === "vendor" ? "Vendeur" : "Tailleur"}
+                      {r === "buyer" ? "Acheteur" : r === "supplier" ? "Fournisseur" : "Tailleur"}
                     </Text>
                   </Pressable>
                 ))}
               </View>
+              {role === "supplier" && (
+                <TextInput
+                  testID="input-shopName"
+                  style={styles.input}
+                  placeholder="Nom de votre boutique"
+                  placeholderTextColor={colors.muted}
+                  value={shopName}
+                  onChangeText={setShopName}
+                />
+              )}
             </>
           )}
 

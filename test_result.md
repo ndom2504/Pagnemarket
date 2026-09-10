@@ -101,3 +101,48 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Iteration 2 — Fournisseur, Mobile Money, Upload photos, Recos
+user_problem_statement: "Mobile Money (Orange/MTN/Moov), upload photos fournisseur (caméra/galerie), dashboard fournisseur live, recommandations 'Pour vous', renommer vendeur -> fournisseur"
+backend:
+  - task: "Mobile Money init/status/webhook (CinetPay, fallback simulation quand clés absentes)"
+    file: "backend/routers/payments.py"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/payments/mobile-money/init, GET /api/payments/{tx}/status (simulation passe à PAID après 6s), GET /api/payments/config"
+  - task: "Supplier dashboard stats + products CRUD + orders status"
+    file: "backend/routers/supplier.py"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "GET /api/supplier/stats, GET/POST/PUT/DELETE /api/supplier/products, GET /api/supplier/orders, PATCH /api/supplier/orders/{id}/status"
+  - task: "Image upload Emergent Object Storage"
+    file: "backend/routers/uploads.py"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/uploads/image (multipart), GET /api/files/{id} public"
+  - task: "Recommendations + view tracking"
+    file: "backend/routers/reco.py"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/events/view, GET /api/recommendations"
+frontend:
+  - task: "Checkout Mobile Money (opérateurs, numéro, écran attente + polling)"
+    file: "frontend/app/checkout.tsx"
+    status_history:
+      - working: "NA"
+        agent: "main"
+  - task: "Espace fournisseur (dashboard, mes tissus, formulaire + PhotoPicker)"
+    file: "frontend/app/supplier/*.tsx, frontend/src/components/photo-picker.tsx"
+    status_history:
+      - working: "NA"
+        agent: "main"
+  - task: "Home 'Pour vous'"
+    file: "frontend/app/(tabs)/index.tsx"
+    status_history:
+      - working: "NA"
+        agent: "main"
+test_plan:
+  current_focus: ["Mobile Money flow", "Supplier dashboard/products", "Upload", "Pour vous"]

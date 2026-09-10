@@ -9,14 +9,19 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.tissuehub.gpxlrs"
+      "bundleIdentifier": "com.emergent.tissuehub.gpxlrs",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Photographiez vos tissus pour les publier",
+        "NSPhotoLibraryUsageDescription": "Publiez les photos de vos tissus"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.emergent.tissuehub.gpxlrs"
+      "package": "com.emergent.tissuehub.gpxlrs",
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
     },
     "web": {
       "bundler": "metro",
@@ -39,6 +44,13 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-status-bar",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Publiez les photos de vos tissus",
+          "cameraPermission": "Photographiez vos tissus pour les publier"
+        }
+      ],
       "@react-native-vector-icons/feather"
     ],
     "experiments": {

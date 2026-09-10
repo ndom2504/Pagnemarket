@@ -3,7 +3,7 @@ import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Haptics from "expo-haptics";
 import {
   ActivityIndicator,
@@ -31,6 +31,12 @@ export default function ProductDetail() {
   const [fav, setFav] = useState(false);
 
   const q = useQuery({ queryKey: ["product", id], queryFn: () => api(`/products/${id}`) });
+  useEffect(() => {
+    if (!id) return;
+    api("/events/view", { method: "POST", body: JSON.stringify({ productId: id }) })
+      .then(() => qc.invalidateQueries({ queryKey: ["recommendations"] }))
+      .catch(() => {});
+  }, [id, qc]);
   const addToCart = useMutation({
     mutationFn: () =>
       api("/cart/add", {
@@ -119,11 +125,11 @@ export default function ProductDetail() {
           <View style={styles.vendorCard}>
             <View style={styles.vendorAvatar}>
               <Text style={{ color: colors.onSurfaceInverse, fontWeight: "500" }}>
-                {p.vendorName.charAt(0)}
+                {p.supplierName.charAt(0)}
               </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.vendorName}>{p.vendorName}</Text>
+              <Text style={styles.supplierName}>{p.supplierName}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Icon name="map-pin" size={12} color={colors.muted} />
                 <Text style={styles.vendorLoc}>{p.location}</Text>
@@ -264,7 +270,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  vendorName: { fontWeight: "500", color: colors.onSurface, fontSize: 14 },
+  supplierName: { fontWeight: "500", color: colors.onSurface, fontSize: 14 },
   vendorLoc: { color: colors.muted, fontSize: 12 },
   followBtn: {
     borderWidth: 1,
