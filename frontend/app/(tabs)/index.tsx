@@ -1,0 +1,337 @@
+import { useQuery } from "@tanstack/react-query";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { api, formatXAF } from "@/src/api";
+import { Icon } from "@/src/icon";
+import { colors } from "@/src/theme";
+
+const HERO_IMG =
+  "https://images.unsplash.com/photo-1768212566108-4ce4f329e4d2?w=1200&q=80";
+
+export default function Home() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const categories = useQuery({ queryKey: ["categories"], queryFn: () => api("/categories") });
+  const trending = useQuery({ queryKey: ["trending"], queryFn: () => api("/products/trending") });
+  const creators = useQuery({ queryKey: ["creators"], queryFn: () => api("/creators") });
+  const models = useQuery({ queryKey: ["models"], queryFn: () => api("/models") });
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.surface }}
+      contentContainerStyle={{ paddingBottom: 24 }}
+      showsVerticalScrollIndicator={false}
+      testID="home-screen"
+    >
+      {/* Hero */}
+      <View style={styles.hero}>
+        <Image source={{ uri: HERO_IMG }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <LinearGradient
+          colors={["rgba(17,17,17,0.1)", "rgba(17,17,17,0.8)"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[styles.heroTop, { paddingTop: insets.top + 12 }]}>
+          <Text style={styles.brand}>PagneMarket</Text>
+          <Pressable
+            testID="header-search"
+            onPress={() => router.push("/(tabs)/shop")}
+            style={styles.iconBtn}
+          >
+            <Icon name="search" color={colors.onSurfaceInverse} size={20} />
+          </Pressable>
+        </View>
+        <View style={styles.heroBottom}>
+          <Text style={styles.heroTitle}>Le pagne africain,{"\n"}autrement.</Text>
+          <Text style={styles.heroSub}>
+            Tissus authentiques, créations uniques, talents d'Afrique.
+          </Text>
+          <View style={styles.heroCtas}>
+            <Pressable
+              testID="cta-shop"
+              style={styles.primaryCta}
+              onPress={() => router.push("/(tabs)/shop")}
+            >
+              <Text style={styles.primaryCtaText}>Découvrir la boutique</Text>
+              <Icon name="arrow-right" size={16} color={colors.onBrandPrimary} />
+            </Pressable>
+            <Pressable
+              testID="cta-models"
+              style={styles.ghostCta}
+              onPress={() => router.push("/(tabs)/models")}
+            >
+              <Text style={styles.ghostCtaText}>Explorer les modèles</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      {/* Categories */}
+      <SectionTitle title="Catégories" />
+      {categories.isLoading ? (
+        <ActivityIndicator style={{ marginVertical: 24 }} color={colors.brandPrimary} />
+      ) : (
+        <FlatList
+          horizontal
+          data={categories.data || []}
+          keyExtractor={(i: any) => i.id}
+          contentContainerStyle={styles.chipsRow}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }: any) => (
+            <Pressable
+              testID={`category-${item.slug}`}
+              style={styles.catCard}
+              onPress={() => router.push(`/(tabs)/shop?category=${item.slug}`)}
+            >
+              <Image source={{ uri: item.image }} style={styles.catImage} contentFit="cover" />
+              <LinearGradient
+                colors={["transparent", "rgba(17,17,17,0.85)"]}
+                style={StyleSheet.absoluteFill}
+              />
+              <Text style={styles.catName}>{item.name}</Text>
+            </Pressable>
+          )}
+        />
+      )}
+
+      {/* Trending */}
+      <SectionTitle title="Tendances du moment" action="Voir tout" onAction={() => router.push("/(tabs)/shop")} />
+      {trending.isLoading ? (
+        <ActivityIndicator style={{ marginVertical: 24 }} color={colors.brandPrimary} />
+      ) : (
+        <FlatList
+          horizontal
+          data={trending.data || []}
+          keyExtractor={(i: any) => i.id}
+          contentContainerStyle={styles.chipsRow}
+          showsHorizontalScrollIndicator={false}
+          renderItem={({ item }: any) => (
+            <Pressable
+              testID={`trending-${item.id}`}
+              style={styles.prodCard}
+              onPress={() => router.push(`/product/${item.id}`)}
+            >
+              <Image source={{ uri: item.images?.[0] }} style={styles.prodImg} contentFit="cover" />
+              {item.promoPrice && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>-15%</Text>
+                </View>
+              )}
+              <View style={{ padding: 12 }}>
+                <Text numberOfLines={1} style={styles.prodName}>{item.name}</Text>
+                <Text style={styles.prodVendor}>{item.vendorName}</Text>
+                <View style={styles.prodBottom}>
+                  <Text style={styles.prodPrice}>{formatXAF(item.promoPrice || item.price)}</Text>
+                  <View style={styles.rating}>
+                    <Icon name="star" size={12} color={colors.brandTertiary} />
+                    <Text style={styles.ratingTxt}>{item.rating}</Text>
+                  </View>
+                </View>
+              </View>
+            </Pressable>
+          )}
+        />
+      )}
+
+      {/* Creators */}
+      <SectionTitle title="Nos créateurs" />
+      <FlatList
+        horizontal
+        data={creators.data || []}
+        keyExtractor={(i: any) => i.id}
+        contentContainerStyle={styles.chipsRow}
+        showsHorizontalScrollIndicator={false}
+        renderItem={({ item }: any) => (
+          <Pressable
+            testID={`creator-${item.id}`}
+            style={styles.creatorCard}
+            onPress={() => router.push(`/creator/${item.id}`)}
+          >
+            <Image source={{ uri: item.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <LinearGradient
+              colors={["transparent", "rgba(17,17,17,0.9)"]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.creatorInfo}>
+              <Image source={{ uri: item.avatar }} style={styles.creatorAvatar} contentFit="cover" />
+              <Text style={styles.creatorName}>{item.name}</Text>
+              <Text style={styles.creatorMeta}>{item.city} · {item.specialty}</Text>
+            </View>
+          </Pressable>
+        )}
+      />
+
+      {/* Models */}
+      <SectionTitle title="Modèles populaires" action="Voir tout" onAction={() => router.push("/(tabs)/models")} />
+      <View style={styles.modelsGrid}>
+        {(models.data || []).slice(0, 4).map((m: any) => (
+          <Pressable
+            key={m.id}
+            testID={`model-${m.id}`}
+            style={styles.modelCard}
+            onPress={() => router.push(`/creator/${m.creatorId}`)}
+          >
+            <Image source={{ uri: m.image }} style={styles.modelImg} contentFit="cover" />
+            <View style={{ padding: 10 }}>
+              <Text numberOfLines={1} style={styles.modelName}>{m.name}</Text>
+              <Text style={styles.modelMeta}>{m.creatorName}</Text>
+              <Text style={styles.modelPrice}>{formatXAF(m.indicativePrice)}</Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+  return (
+    <View style={styles.sectionHead}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {action && (
+        <Pressable onPress={onAction}>
+          <Text style={styles.sectionAction}>{action}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  hero: { height: 520, backgroundColor: colors.surfaceInverse },
+  heroTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  brand: { color: colors.onSurfaceInverse, fontSize: 22, fontWeight: "500", letterSpacing: -0.5 },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroBottom: { position: "absolute", bottom: 24, left: 20, right: 20 },
+  heroTitle: { color: colors.onSurfaceInverse, fontSize: 34, fontWeight: "500", lineHeight: 40, letterSpacing: -1 },
+  heroSub: { color: colors.onSurfaceInverse, opacity: 0.85, marginTop: 12, fontSize: 14, lineHeight: 20 },
+  heroCtas: { flexDirection: "row", gap: 10, marginTop: 20, flexWrap: "wrap" },
+  primaryCta: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  primaryCtaText: { color: colors.onSurface, fontWeight: "500" },
+  ghostCta: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
+  },
+  ghostCtaText: { color: colors.onSurfaceInverse, fontWeight: "500" },
+  sectionHead: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginTop: 28,
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 20, fontWeight: "500", color: colors.onSurface, letterSpacing: -0.5 },
+  sectionAction: { color: colors.brandSecondary, fontSize: 13, fontWeight: "500" },
+  chipsRow: { paddingHorizontal: 20, gap: 12 },
+  catCard: {
+    width: 130,
+    height: 160,
+    borderRadius: 12,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+    padding: 12,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  catImage: { width: "100%", height: "100%" },
+  catName: { color: colors.onSurfaceInverse, fontWeight: "500", fontSize: 14 },
+  prodCard: {
+    width: 200,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  prodImg: { width: "100%", height: 180 },
+  badge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: colors.brandSecondary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  badgeText: { color: colors.onBrandSecondary, fontSize: 11, fontWeight: "500" },
+  prodName: { fontSize: 14, fontWeight: "500", color: colors.onSurface },
+  prodVendor: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  prodBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  prodPrice: { fontWeight: "500", color: colors.onSurface, fontSize: 14 },
+  rating: { flexDirection: "row", alignItems: "center", gap: 3 },
+  ratingTxt: { color: colors.muted, fontSize: 12 },
+  creatorCard: {
+    width: 180,
+    height: 240,
+    borderRadius: 12,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  creatorInfo: { padding: 12 },
+  creatorAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.onSurfaceInverse,
+    marginBottom: 8,
+  },
+  creatorName: { color: colors.onSurfaceInverse, fontSize: 15, fontWeight: "500" },
+  creatorMeta: { color: colors.onSurfaceInverse, opacity: 0.8, fontSize: 12, marginTop: 2 },
+  modelsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  modelCard: {
+    width: "48%",
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modelImg: { width: "100%", height: 200 },
+  modelName: { fontSize: 13, fontWeight: "500", color: colors.onSurface },
+  modelMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  modelPrice: { fontSize: 13, fontWeight: "500", color: colors.brandSecondary, marginTop: 4 },
+});

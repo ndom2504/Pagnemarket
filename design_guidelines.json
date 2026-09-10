@@ -1,0 +1,185 @@
+{
+  "app_name": "PagneMarket",
+  "personality": "3 Editorial Mobile LIGHT fused with 6 Glass / Luxe premium e-commerce structure",
+  "personality_one_liner": "A highly curated, tactile, and elegant marketplace treating African wax fabrics as luxury, contemporary art.",
+  "color": {
+    "surface": "#FAF8F3",
+    "onSurface": "#111111",
+    "surfaceSecondary": "#E8DCC8",
+    "onSurfaceSecondary": "#111111",
+    "surfaceTertiary": "#FFFFFF",
+    "onSurfaceTertiary": "#111111",
+    "surfaceInverse": "#111111",
+    "onSurfaceInverse": "#FAF8F3",
+    "brand": "#111111",
+    "onBrand": "#FAF8F3",
+    "brandPrimary": "#111111",
+    "onBrandPrimary": "#FAF8F3",
+    "brandSecondary": "#B85C38",
+    "onBrandSecondary": "#FAF8F3",
+    "brandTertiary": "#C8A96B",
+    "onBrandTertiary": "#111111",
+    "success": "#173F35",
+    "onSuccess": "#FFFFFF",
+    "warning": "#C8A96B",
+    "onWarning": "#111111",
+    "error": "#B85C38",
+    "onError": "#FFFFFF",
+    "info": "#E8DCC8",
+    "onInfo": "#111111",
+    "border": "#E8DCC8",
+    "borderStrong": "#C8A96B",
+    "divider": "#E8DCC8",
+    "muted": "#595550"
+  },
+  "typography": {
+    "displayFontFamily": "Manrope",
+    "textFontFamily": "Manrope",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous vertical breathing room for an editorial feel. Components should never feel cramped.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Use on sticky headers over scrolling content",
+      "Use on the bottom tab bar to let fabric images peek through",
+      "Use on sticky 'Add to Cart' containers at the bottom of Product Detail screens"
+    ],
+    "dont's": [
+      "Do not use on regular product cards",
+      "Do not use on form inputs"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home",
+      "purpose": "Showcase premium fabrics, curated collections, and top creators.",
+      "states": {
+        "loading": "Skeleton loaders for hero card and category lists.",
+        "empty": "No collections available.",
+        "error": "Unable to load trends. Retry button."
+      },
+      "layout": "Hero section featuring a large featured fabric card (with gradient scrim and text overlay). Below it, horizontally scrolling pills for categories. A horizontal list for 'Popular Creators' (circular avatars or portrait cards), followed by a 2-column grid of 'Trending Pagne'."
+    },
+    {
+      "name": "Shop",
+      "purpose": "Main browsing interface for fabrics and clothing.",
+      "states": {
+        "loading": "Skeleton grid.",
+        "empty": "No products match the selected filters. Illustration + 'Clear filters' CTA.",
+        "error": "Failed to load products."
+      },
+      "layout": "Sticky glass header with a search bar and filter button. A 2-column grid for products. Each card has an image, title, price, and a small Terracotta/Gold badge if on sale or premium."
+    },
+    {
+      "name": "ProductDetail",
+      "purpose": "Provide deep context and purchasing capability for a fabric/item.",
+      "states": {
+        "loading": "Image skeleton and text placeholder.",
+        "empty": "Product unavailable.",
+        "error": "Failed to fetch product details."
+      },
+      "layout": "Large, full-width image gallery at the top (pagination dots). Title, price, and creator info below with generous spacing. Expandable 'About the pattern' section. Fixed glassmorphism container at the bottom with a primary CTA (Noir profond) to 'Add to Cart'."
+    },
+    {
+      "name": "Models",
+      "purpose": "Inspiration gallery of tailor-made clothing using the fabrics.",
+      "states": {
+        "loading": "Skeleton cards.",
+        "empty": "No models posted yet.",
+        "error": "Failed to load inspiration gallery."
+      },
+      "layout": "Masonry or large vertical card layout. Images take priority, with minimal UI. Tapping a model shows which fabric was used and links to the tailor."
+    },
+    {
+      "name": "CreatorProfile",
+      "purpose": "Showcase a tailor or vendor's bespoke identity and listings.",
+      "states": {
+        "loading": "Profile skeleton.",
+        "empty": "Creator has no items.",
+        "error": "Failed to load profile."
+      },
+      "layout": "Cover image banner at the top, creator avatar overlapping it. Bio text. Segmented tabs (Glass surface) for 'Fabrics', 'Models', 'Reviews'."
+    },
+    {
+      "name": "Messages",
+      "purpose": "Allow buyers to chat with tailors for custom orders.",
+      "states": {
+        "loading": "List skeleton.",
+        "empty": "No messages yet. 'Find a Tailor' CTA.",
+        "error": "Failed to load messages."
+      },
+      "layout": "Standard list of conversation threads with unread indicators in Terracotta (#B85C38)."
+    },
+    {
+      "name": "CartCheckout",
+      "purpose": "Review items and complete the purchase.",
+      "states": {
+        "loading": "Processing overlay.",
+        "empty": "Cart is empty. 'Explore Fabrics' CTA.",
+        "error": "Payment failed."
+      },
+      "layout": "List of items with thumbnail, title, and quantity adjusters. Subtotal section. Sticky 'Checkout' CTA at the bottom."
+    }
+  ],
+  "images": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1768212566108-4ce4f329e4d2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHw0fHxBZnJpY2FuJTIwd2F4JTIwcHJpbnQlMjBmYWJyaWMlMjBwYXR0ZXJufGVufDB8fHx8MTc4ODk5NjYzMXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Colorful textiles with intricate African wax print patterns hanging on display"
+    },
+    "shop_category_fabrics": {
+      "url": "https://images.unsplash.com/photo-1552710307-537199cd41c0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwxfHxBZnJpY2FuJTIwd2F4JTIwcHJpbnQlMjBmYWJyaWMlMjBwYXR0ZXJufGVufDB8fHx8MTc4ODk5NjYzMXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Assorted-color African textiles stacked"
+    },
+    "creator_cover": {
+      "url": "https://images.unsplash.com/photo-1760907949889-eb62b7fd9f75?crop=entropy&cs=srgb&fm=jpg&ixid=M3w8NjA2MDV8MHwxfHNlYXJjaHw0fHxBZnJpY2FuJTIwZmFzaGlvbiUyMG1vZGVsJTIwYW5rYXJhfGVufDB8fHx8MTc4ODk5NjYzMXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Young African fashion model in a beautifully patterned ankara dress"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the selected color palette. Use the primary 'Noir profond' (#111111) for high-impact elements like the main CTA to achieve a premium e-commerce look.",
+    "Use Manrope for both display and text typography. Maintain varying sizes (e.g., 24pt for headers, 16pt for body) and weight strictly capped at 500.",
+    "Avoid using indigo, blue, or purple anywhere. Use the Terracotta (#B85C38) and Gold (#C8A96B) exclusively for accents, unread badges, and premium indications.",
+    "All cards containing images must have slightly rounded corners (`md` / 12px) and no drop shadows (tier 0). Let the layout breathe with spacing rather than outlining everything.",
+    "Whenever text overlaps an image (like in the Hero component or Creator Banner), a top-to-bottom gradient scrim (transparent to surfaceInverse) is MANDATORY.",
+    "Implement glassmorphism for sticky action bars, such as the bottom tab bar and the sticky 'Add to Cart' footer on product detail pages.",
+    "Add subtle haptic feedback for adding items to the cart, sending messages, and switching main tabs.",
+    "Follow the 5-tab bottom navigation: Accueil (Home), Boutique (Shop), Modèles (Models), Messages, Profil (Profile)."
+  ]
+}
