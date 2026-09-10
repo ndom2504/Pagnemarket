@@ -34,6 +34,11 @@ Marketplace mobile premium dédiée aux tissus pagne africains, aux modèles et 
 - Acheteur : demo@pagnemarket.com / Demo1234!
 - Fournisseur : fournisseur@pagnemarket.com / Fournisseur1234! (Maison Adjoua)
 
+## Itération 3 (Livré)
+16. **Suivi de commande acheteur** – `/orders` (liste) et `/order/[id]` (timeline en direct Confirmée → En préparation → Expédiée → Livrée, horodatée via `statusHistory`, rafraîchissement 15 s). Le stock est décrémenté à chaque commande payée.
+17. **Avis tissus** – après livraison, « Noter ce tissu » (1-5 étoiles + commentaire, un avis par tissu/commande) ; note moyenne du produit recalculée ; section « Avis des acheteurs » sur la fiche produit (`POST /api/reviews`, `GET /api/products/{id}/reviews`).
+18. **Alertes stock bas** – bannière in-app sur le dashboard fournisseur quand un tissu passe sous 3 pièces (`GET /api/supplier/alerts`), bouton Réapprovisionner → formulaire d'édition ; badge « Stock bas » dans Mes tissus.
+
 ## Business Enhancement Suggéré
 Système de commission marketplace (10% configurable) déjà supporté côté modèle de données → prêt à activer une "marketplace fee" pour monétiser dès le premier volume de commandes.
 
