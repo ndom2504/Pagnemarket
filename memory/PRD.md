@@ -42,6 +42,10 @@ Marketplace mobile premium dédiée aux tissus pagne africains, aux modèles et 
 ## Business Enhancement Suggéré
 Système de commission marketplace (10% configurable) déjà supporté côté modèle de données → prêt à activer une "marketplace fee" pour monétiser dès le premier volume de commandes.
 
+## Itération 4 (Livré)
+19. **Deux rôles seulement** – inscription **Client** / **Fournisseur**. Le tailleur n'est plus un rôle : il vit dans un volet (onglet Tailleurs + sheet « Faire coudre » sur la fiche tissu).
+20. **Générer un modèle avec l'IA** – sur la fiche produit, le client choisit une silhouette (Robe, Boubou, Ensemble…) puis `POST /api/ai/looks`. Révélation plein écran, puis ajout au panier ou contact tailleur.
+
 ## Non-inclus / à venir
 - Paiement carte réel (mocké) ; Mobile Money réel nécessite les clés CinetPay (APIKEY + SITE_ID)
 - Notifications push

@@ -35,9 +35,9 @@ export default function Messages() {
           <Icon name="message-circle" size={48} color={colors.muted} />
           <Text style={styles.emptyTitle}>Aucune conversation</Text>
           <Text style={styles.emptySub}>
-            Contactez un créateur pour lancer une conversation.
+            Contactez un tailleur pour faire coudre votre tissu.
           </Text>
-          <Text style={styles.section}>Nos tailleurs</Text>
+          <Text style={styles.section}>Tailleurs</Text>
           <FlatList
             data={(creators.data as any[]) || []}
             keyExtractor={(i) => i.id}

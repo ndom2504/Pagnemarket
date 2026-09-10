@@ -14,6 +14,7 @@ from routers import supplier as supplier_router
 from routers import uploads as uploads_router
 from routers import reco as reco_router
 from routers import reviews as reviews_router
+from routers import ai_looks as ai_looks_router
 from routers.payments import OrderDraft, build_order_from_cart
 from storage import init_storage
 
@@ -656,6 +657,7 @@ api_router.include_router(supplier_router.router)
 api_router.include_router(uploads_router.router)
 api_router.include_router(reco_router.router)
 api_router.include_router(reviews_router.router)
+api_router.include_router(ai_looks_router.router)
 app.include_router(api_router)
 
 app.add_middleware(
@@ -668,6 +670,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def on_startup():
+    if hasattr(db, "ready"):
+        await db.ready()
     await seed_database()
     try:
         await run_in_threadpool(init_storage)
@@ -677,4 +681,8 @@ async def on_startup():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    close = getattr(client, "aclose", None)
+    if close:
+        await close()
+    elif hasattr(client, "close"):
+        client.close()

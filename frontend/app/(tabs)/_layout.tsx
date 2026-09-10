@@ -36,7 +36,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="models"
         options={{
-          title: "Modèles",
+          title: "Tailleurs",
           tabBarIcon: ({ color }) => <Icon name="scissors" color={color} size={22} />,
         }}
       />

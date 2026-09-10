@@ -32,7 +32,7 @@ export default function AuthScreen() {
   const [password, setPassword] = useState("");
   const [city, setCity] = useState("");
   const [shopName, setShopName] = useState("");
-  const [role, setRole] = useState<"buyer" | "supplier" | "tailor">("buyer");
+  const [role, setRole] = useState<"buyer" | "supplier">("buyer");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -137,7 +137,7 @@ export default function AuthScreen() {
                 onChangeText={setCity}
               />
               <View style={styles.rolesRow}>
-                {(["buyer", "supplier", "tailor"] as const).map((r) => (
+                {(["buyer", "supplier"] as const).map((r) => (
                   <Pressable
                     key={r}
                     testID={`role-${r}`}
@@ -147,7 +147,7 @@ export default function AuthScreen() {
                     <Text
                       style={[styles.roleText, role === r && styles.roleTextActive]}
                     >
-                      {r === "buyer" ? "Acheteur" : r === "supplier" ? "Fournisseur" : "Tailleur"}
+                      {r === "buyer" ? "Client" : "Fournisseur"}
                     </Text>
                   </Pressable>
                 ))}

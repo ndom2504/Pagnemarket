@@ -47,7 +47,7 @@ export default function Profile() {
             {(user?.roles || []).map((r) => (
               <View key={r} style={styles.rolePill}>
                 <Text style={styles.roleText}>
-                  {r === "buyer" ? "Acheteur" : r === "supplier" ? "Fournisseur" : r === "tailor" ? "Tailleur" : r}
+                  {r === "buyer" ? "Client" : r === "supplier" ? "Fournisseur" : r === "tailor" ? "Tailleur" : r}
                 </Text>
               </View>
             ))}

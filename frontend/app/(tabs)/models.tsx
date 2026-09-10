@@ -33,8 +33,10 @@ export default function Models() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.title}>Modèles</Text>
-        <Text style={styles.subtitle}>Créations uniques par nos tailleurs.</Text>
+        <Text style={styles.title}>Tailleurs</Text>
+        <Text style={styles.subtitle}>
+          Inspirez-vous, puis faites coudre le tissu que vous avez choisi.
+        </Text>
         <FlatList
           horizontal
           data={CATS}

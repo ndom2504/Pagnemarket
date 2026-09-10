@@ -18,6 +18,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
+import { AiLookStudio } from "@/src/components/ai-look-studio";
+import { TailorSheet } from "@/src/components/tailor-sheet";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
 
@@ -29,6 +31,8 @@ export default function ProductDetail() {
   const { width } = useWindowDimensions();
   const [imgIdx, setImgIdx] = useState(0);
   const [fav, setFav] = useState(false);
+  const [tailorOpen, setTailorOpen] = useState(false);
+  const [tailorGarment, setTailorGarment] = useState<string | undefined>();
 
   const q = useQuery({ queryKey: ["product", id], queryFn: () => api(`/products/${id}`) });
   const reviews = useQuery({ queryKey: ["reviews", id], queryFn: () => api(`/products/${id}/reviews`, { auth: false }) });
@@ -147,6 +151,16 @@ export default function ProductDetail() {
             <Text style={styles.desc}>{p.description}</Text>
           </View>
 
+          <AiLookStudio
+            productId={String(id)}
+            productName={p.name}
+            onOpenTailors={(g) => {
+              setTailorGarment(g);
+              setTailorOpen(true);
+            }}
+            onAddToCart={() => addToCart.mutate()}
+          />
+
           <View style={styles.attrsGrid}>
             <Attr label="Stock" value={p.stock > 0 ? `${p.stock} pièces` : "Rupture"} />
             <Attr label="Origine" value={p.location.split(",")[1]?.trim() || "Afrique"} />
@@ -223,6 +237,13 @@ export default function ProductDetail() {
           </Pressable>
         </View>
       </View>
+
+      <TailorSheet
+        visible={tailorOpen}
+        productName={p.name}
+        garment={tailorGarment}
+        onClose={() => setTailorOpen(false)}
+      />
     </View>
   );
 }

@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import { storage } from "@/src/utils/storage";
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL as string;
+const BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://pagnemarket.vercel.app").replace(/\/$/, "");
 
 const KEY = "pm_token";
 let cachedToken: string | null = null;

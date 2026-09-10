@@ -11,10 +11,27 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
+load_dotenv(ROOT_DIR.parent / "frontend" / ".env", override=False)
 
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+database_url = (os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or "").strip()
+mongo_url = os.environ.get("MONGO_URL", "mock://local")
+db_name = os.environ.get("DB_NAME", "pagnemarket")
+
+
+def _make_db():
+    if database_url.startswith("postgres"):
+        from pg_store import PgDatabase
+        store = PgDatabase(database_url)
+        return store, store
+    if mongo_url.startswith("mock://"):
+        from mongomock_motor import AsyncMongoMockClient
+        mongo = AsyncMongoMockClient()
+        return mongo, mongo[db_name]
+    mongo = AsyncIOMotorClient(mongo_url)
+    return mongo, mongo[db_name]
+
+
+client, db = _make_db()
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "pagnemarket-secret-key-change-me-2026")
 JWT_ALG = "HS256"

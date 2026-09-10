@@ -63,7 +63,7 @@ export default function Home() {
         <View style={styles.heroBottom}>
           <Text style={styles.heroTitle}>Le pagne africain,{"\n"}autrement.</Text>
           <Text style={styles.heroSub}>
-            Tissus authentiques, créations uniques, talents d'Afrique.
+            Vous choisissez le tissu. Un tailleur le coud. L’IA imagine la tenue.
           </Text>
           <View style={styles.heroCtas}>
             <Pressable
@@ -79,7 +79,7 @@ export default function Home() {
               style={styles.ghostCta}
               onPress={() => router.push("/(tabs)/models")}
             >
-              <Text style={styles.ghostCtaText}>Explorer les modèles</Text>
+              <Text style={styles.ghostCtaText}>Voir les tailleurs</Text>
             </Pressable>
           </View>
         </View>
@@ -197,7 +197,7 @@ export default function Home() {
       )}
 
       {/* Creators */}
-      <SectionTitle title="Nos créateurs" />
+      <SectionTitle title="Tailleurs" subtitle="Ils cousent le tissu que vous choisissez." />
       <FlatList
         horizontal
         data={creators.data || []}
@@ -225,7 +225,7 @@ export default function Home() {
       />
 
       {/* Models */}
-      <SectionTitle title="Modèles populaires" action="Voir tout" onAction={() => router.push("/(tabs)/models")} />
+      <SectionTitle title="Inspirations à coudre" action="Voir tout" onAction={() => router.push("/(tabs)/models")} />
       <View style={styles.modelsGrid}>
         {(models.data || []).slice(0, 4).map((m: any) => (
           <Pressable
