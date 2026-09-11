@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 export default function CreatorProfile() {
@@ -73,7 +74,7 @@ export default function CreatorProfile() {
         </View>
 
         <View style={styles.headerBlock}>
-          <Image source={{ uri: creator.avatar }} style={styles.avatar} contentFit="cover" />
+          <Image source={{ uri: mediaUrl(creator.avatar) }} style={styles.avatar} contentFit="cover" />
           <Text style={styles.name}>{creator.name}</Text>
           <Text style={styles.meta}>
             {creator.city}, {creator.country} · {creator.specialty}

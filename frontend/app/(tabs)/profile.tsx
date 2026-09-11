@@ -13,7 +13,10 @@ import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
 import { PAYMENT_LABEL, statusOf } from "@/src/order-status";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
+
+const AVATAR: string | undefined = undefined;
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -35,8 +38,12 @@ export default function Profile() {
     >
       <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
         <Pressable testID="profile-avatar" onPress={() => router.push("/settings")}>
-          {user?.avatar ? (
-            <Image source={{ uri: user.avatar }} style={styles.avatar} contentFit="cover" />
+          {user?.avatarUrl || user?.avatar || AVATAR ? (
+            <Image
+              source={{ uri: mediaUrl(user?.avatarUrl || user?.avatar || AVATAR) }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
               <Text style={styles.avatarInitial}>

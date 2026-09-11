@@ -5,6 +5,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 type Props = {
@@ -55,7 +56,7 @@ export function TailorSheet({ visible, productName, garment, onClose }: Props) {
                   router.push(`/creator/${c.id}`);
                 }}
               >
-                <Image source={{ uri: c.avatar }} style={styles.avatar} contentFit="cover" />
+                <Image source={{ uri: mediaUrl(c.avatar) }} style={styles.avatar} contentFit="cover" />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{c.name}</Text>
                   <Text style={styles.meta}>

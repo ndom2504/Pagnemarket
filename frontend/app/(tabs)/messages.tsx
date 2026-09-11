@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 export default function Messages() {
@@ -50,7 +51,7 @@ export default function Messages() {
                 style={styles.creatorPill}
                 onPress={() => router.push(`/creator/${item.id}`)}
               >
-                <Image source={{ uri: item.avatar }} style={styles.avatar} contentFit="cover" />
+                <Image source={{ uri: mediaUrl(item.avatar) }} style={styles.avatar} contentFit="cover" />
                 <Text style={styles.creatorName}>{item.name}</Text>
               </Pressable>
             )}

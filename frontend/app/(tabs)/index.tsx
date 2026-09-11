@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 const HERO_IMG =
@@ -250,7 +251,7 @@ export default function Home() {
               style={StyleSheet.absoluteFill}
             />
             <View style={styles.creatorInfo}>
-              <Image source={{ uri: item.avatar }} style={styles.creatorAvatar} contentFit="cover" />
+              <Image source={{ uri: mediaUrl(item.avatar) }} style={styles.creatorAvatar} contentFit="cover" />
               <Text style={styles.creatorName}>{item.name}</Text>
               <Text style={styles.creatorMeta}>
                 {[item.city, item.country].filter(Boolean).join(", ")} · {item.specialty}

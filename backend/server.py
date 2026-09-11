@@ -55,6 +55,7 @@ class UserOut(BaseModel):
     city: Optional[str] = None
     roles: List[str] = []
     avatar: Optional[str] = None
+    avatarUrl: Optional[str] = None
     shopName: Optional[str] = None
     createdAt: Optional[datetime] = None
 
@@ -169,7 +170,8 @@ def user_public(u: dict) -> dict:
         "country": u.get("country"),
         "city": u.get("city"),
         "roles": u.get("roles") or ["buyer"],
-        "avatar": u.get("avatar"),
+        "avatar": u.get("avatar") or u.get("avatarUrl"),
+        "avatarUrl": u.get("avatar") or u.get("avatarUrl"),
         "shopName": u.get("shopName"),
         "createdAt": created,
     }
@@ -221,6 +223,7 @@ class UserUpdate(BaseModel):
     city: Optional[str] = None
     shopName: Optional[str] = None
     avatar: Optional[str] = None
+    avatarUrl: Optional[str] = None
 
 
 @api_router.get("/auth/me")
@@ -240,9 +243,18 @@ async def set_profile_avatar(request: Request, user: dict = Depends(current_user
     return await save_json_image(request, user, payload)
 
 
+@api_router.patch("/profile")
 @api_router.patch("/auth/me")
 async def update_me(body: UserUpdate, user: dict = Depends(current_user)):
-    patch = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    raw = body.model_dump(exclude_unset=True)
+    if "avatarUrl" in raw:
+        raw["avatar"] = raw.pop("avatarUrl")
+    patch = {}
+    for k, v in raw.items():
+        if k == "avatar":
+            patch[k] = v
+        elif v is not None:
+            patch[k] = v
     if "firstName" in patch and not str(patch["firstName"]).strip():
         raise HTTPException(400, "Indiquez votre prénom")
     if "lastName" in patch and not str(patch["lastName"]).strip():
@@ -253,7 +265,7 @@ async def update_me(body: UserUpdate, user: dict = Depends(current_user)):
         patch["lastName"] = str(patch["lastName"]).strip()
     if "shopName" in patch:
         patch["shopName"] = str(patch["shopName"]).strip() or None
-    if "avatar" in patch:
+    if "avatar" in patch and patch["avatar"] is not None:
         patch["avatar"] = str(patch["avatar"]).strip() or None
     if "supplier" in user.get("roles", []) and "city" in patch and not str(patch.get("city") or "").strip():
         raise HTTPException(400, "Indiquez la ville de votre boutique")

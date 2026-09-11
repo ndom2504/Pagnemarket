@@ -18,6 +18,7 @@ import { CityPicker } from "@/src/components/city-picker";
 import { CountryPicker } from "@/src/components/country-picker";
 import { countryByName, type Country } from "@/src/countries";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 export default function SettingsScreen() {
@@ -32,7 +33,7 @@ export default function SettingsScreen() {
   const [country, setCountry] = useState<Country>(() => countryByName(user?.country));
   const [city, setCity] = useState(user?.city || "");
   const [shopName, setShopName] = useState(user?.shopName || "");
-  const [avatar, setAvatar] = useState(user?.avatar || "");
+  const [avatar, setAvatar] = useState(user?.avatarUrl || user?.avatar || "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
@@ -59,7 +60,6 @@ export default function SettingsScreen() {
         country: country.name,
         city: city.trim() || undefined,
         shopName: isSupplier ? shopName.trim() || undefined : undefined,
-        avatar: avatar || undefined,
       });
       setOk(true);
     } catch (e: any) {
@@ -87,16 +87,18 @@ export default function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <AvatarPicker
-          uri={avatar || undefined}
+          uri={avatar ? mediaUrl(avatar) : undefined}
           initials={initials}
           onChange={async (url) => {
-            setAvatar(url);
-            setOk(true);
             setErr(null);
+            setOk(false);
             try {
+              await updateProfile({ avatarUrl: url, avatar: url });
+              setAvatar(url || "");
               await refresh();
-            } catch {
-              /* la photo est déjà enregistrée avec l'envoi */
+              setOk(true);
+            } catch (e: any) {
+              setErr(e.message || "Impossible d'enregistrer la photo");
             }
           }}
         />

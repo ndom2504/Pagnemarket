@@ -184,6 +184,17 @@ class TestUploads:
         assert r2.status_code == 200
         assert r2.headers.get("content-type", "").startswith("image/")
 
+    def test_upload_alias(self, api, base_url, buyer_auth):
+        img = Image.new("RGB", (32, 32), color=(10, 20, 30))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        buf.seek(0)
+        headers = {"Authorization": f"Bearer {buyer_auth['token']}"}
+        r = requests.post(f"{base_url}/api/upload", headers=headers,
+                          files={"file": ("avatar.jpg", buf, "image/jpeg")})
+        assert r.status_code == 200, r.text
+        assert "url" in r.json()
+
     def test_upload_reject_non_image(self, api, base_url, buyer_auth):
         headers = {"Authorization": f"Bearer {buyer_auth['token']}"}
         r = requests.post(f"{base_url}/api/uploads/image", headers=headers,

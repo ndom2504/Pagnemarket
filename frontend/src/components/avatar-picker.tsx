@@ -11,8 +11,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { uploadImage } from "@/src/api";
 import { Icon } from "@/src/icon";
+import { mediaUrl, prepareImageUpload, uploadFile } from "@/src/media";
 import { colors } from "@/src/theme";
 
 type Source = "camera" | "gallery";
@@ -20,11 +20,10 @@ type Source = "camera" | "gallery";
 type Props = {
   uri?: string | null;
   initials?: string;
-  onChange: (url: string) => void;
+  onChange: (url: string | null) => void;
 };
 
 export function AvatarPicker({ uri, initials, onChange }: Props) {
-  const [sheet, setSheet] = useState(false);
   const [explain, setExplain] = useState<Source | null>(null);
   const [blocked, setBlocked] = useState<Source | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -36,7 +35,6 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
     source === "camera" ? ImagePicker.requestCameraPermissionsAsync() : ImagePicker.requestMediaLibraryPermissionsAsync();
 
   const start = async (source: Source) => {
-    setSheet(false);
     setError(null);
     if (Platform.OS === "web") return launch(source);
     const current = await getPermission(source);
@@ -56,16 +54,16 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
   const launch = async (source: Source) => {
     const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: ["images"],
-      quality: 0.5,
+      quality: 1,
       allowsEditing: false,
-      base64: true,
     };
     const result =
       source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-    if (result.canceled || !result.assets[0]) return;
+    if (result.canceled || !result.assets[0]?.uri) return;
     setUploading(true);
     try {
-      const up = await uploadImage(result.assets[0], { asAvatar: true });
+      const prepared = await prepareImageUpload(result.assets[0].uri);
+      const up = await uploadFile(prepared);
       onChange(up.url);
     } catch (e: any) {
       setError(e.message || "Échec de l'envoi");
@@ -76,9 +74,9 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
 
   return (
     <View style={{ alignItems: "center" }}>
-      <Pressable testID="avatar-pick" style={styles.wrap} onPress={() => setSheet(true)} disabled={uploading}>
+      <Pressable testID="avatar-pick" style={styles.wrap} onPress={() => start("gallery")} disabled={uploading}>
         {uri ? (
-          <Image source={{ uri }} style={styles.img} contentFit="cover" />
+          <Image source={{ uri: mediaUrl(uri) }} style={styles.img} contentFit="cover" />
         ) : (
           <View style={styles.fallback}>
             <Text style={styles.initials}>{(initials || "?").slice(0, 2).toUpperCase()}</Text>
@@ -92,34 +90,18 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
           )}
         </View>
       </Pressable>
-      <Text style={styles.hint}>Appuyez pour changer la photo</Text>
-      {error && <Text style={styles.err}>{error}</Text>}
-
-      <Modal visible={sheet} transparent animationType="fade" onRequestClose={() => setSheet(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setSheet(false)}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Photo de profil</Text>
-            <Pressable testID="avatar-camera" style={styles.sheetRow} onPress={() => start("camera")}>
-              <View style={styles.sheetIcon}>
-                <Icon name="camera" size={18} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sheetLbl}>Prendre une photo</Text>
-                <Text style={styles.sheetSub}>Utilisez l’appareil photo</Text>
-              </View>
-            </Pressable>
-            <Pressable testID="avatar-gallery" style={styles.sheetRow} onPress={() => start("gallery")}>
-              <View style={styles.sheetIcon}>
-                <Icon name="image" size={18} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sheetLbl}>Choisir dans la galerie</Text>
-                <Text style={styles.sheetSub}>Une photo de votre appareil</Text>
-              </View>
-            </Pressable>
-          </View>
+      <Text style={styles.hint}>Appuyez pour choisir dans la galerie</Text>
+      <View style={styles.actions}>
+        <Pressable testID="avatar-camera" onPress={() => start("camera")} disabled={uploading}>
+          <Text style={styles.actionTxt}>Appareil photo</Text>
         </Pressable>
-      </Modal>
+        {uri ? (
+          <Pressable testID="avatar-remove" onPress={() => onChange(null)} disabled={uploading}>
+            <Text style={styles.actionTxt}>Supprimer</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {error && <Text style={styles.err}>{error}</Text>}
 
       <Modal visible={!!explain} transparent animationType="fade" onRequestClose={() => setExplain(null)}>
         <View style={styles.backdropCenter}>
@@ -201,29 +183,10 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
   },
   hint: { color: colors.muted, fontSize: 12, marginTop: 10 },
+  actions: { flexDirection: "row", gap: 16, marginTop: 8 },
+  actionTxt: { color: colors.brandPrimary, fontSize: 13, fontWeight: "500" },
   err: { color: colors.error, fontSize: 12, marginTop: 6, textAlign: "center" },
-  backdrop: { flex: 1, backgroundColor: "rgba(17,17,17,0.5)", justifyContent: "flex-end" },
   backdropCenter: { flex: 1, backgroundColor: "rgba(17,17,17,0.5)", justifyContent: "center", padding: 24 },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 36,
-    gap: 6,
-  },
-  sheetTitle: { fontSize: 17, fontWeight: "500", color: colors.onSurface, marginBottom: 8 },
-  sheetRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12 },
-  sheetIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: colors.surfaceSecondary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sheetLbl: { fontSize: 15, fontWeight: "500", color: colors.onSurface },
-  sheetSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   dialog: { backgroundColor: colors.surface, borderRadius: 20, padding: 24, alignItems: "center", gap: 10 },
   dialogIcon: {
     width: 56,
