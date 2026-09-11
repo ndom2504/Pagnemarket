@@ -233,6 +233,31 @@ async def me(user: dict = Depends(current_user)):
     return user_public(user)
 
 
+class AvatarIn(BaseModel):
+    avatarBase64: Optional[str] = None
+    data: Optional[str] = None
+    photo: Optional[str] = None
+    contentType: Optional[str] = "image/jpeg"
+
+
+@api_router.post("/auth/avatar")
+@api_router.post("/auth/me/avatar")
+async def set_my_avatar(request: Request, body: AvatarIn, user: dict = Depends(current_user)):
+    raw = body.avatarBase64 or body.data or body.photo
+    if not raw:
+        raise HTTPException(400, "Photo manquante. Réessayez.")
+    saved = await save_json_image(request, user, {
+        "data": raw,
+        "contentType": body.contentType or "image/jpeg",
+        "fileName": "avatar.jpg",
+        "asAvatar": True,
+    })
+    updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    public = user_public(updated or {**user, "avatar": saved["url"]})
+    public["url"] = saved["url"]
+    return public
+
+
 @api_router.post("/profile/avatar")
 async def set_profile_avatar(request: Request, user: dict = Depends(current_user)):
     content_type = (request.headers.get("content-type") or "").split(";", 1)[0].lower()

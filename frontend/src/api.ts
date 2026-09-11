@@ -86,8 +86,8 @@ export function friendlyUploadError(raw: string, status?: number) {
   if (status === 422 || lower.includes("field required")) {
     return "La photo n'a pas pu être envoyée. Réessayez.";
   }
-  if (status === 404) {
-    return `La route d'envoi est introuvable (${status}). Rechargez l'application.`;
+  if (status === 405 || lower.includes("method not allowed")) {
+    return "Cette action n'est pas autorisée. Rechargez l'application.";
   }
   if (lower.includes("file") && lower.includes("not found")) {
     return "Impossible de lire la photo sur l'appareil.";
@@ -110,11 +110,11 @@ export async function uploadImage(
   const data = await imageToJpegBase64(asset.uri, asset.base64);
   try {
     if (opts.asAvatar) {
-      const me = await api<{ avatar?: string; avatarUrl?: string }>("/auth/me", {
-        method: "PATCH",
-        body: JSON.stringify({ avatarBase64: data }),
+      const me = await api<{ avatar?: string; avatarUrl?: string; url?: string }>("/auth/avatar", {
+        method: "POST",
+        body: JSON.stringify({ avatarBase64: data, contentType: "image/jpeg" }),
       });
-      const url = me.avatar || me.avatarUrl;
+      const url = me.url || me.avatar || me.avatarUrl;
       if (!url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");
       return { url, avatar: url };
     }
