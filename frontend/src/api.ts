@@ -109,13 +109,21 @@ export async function uploadImage(
 
   const data = await imageToJpegBase64(asset.uri, asset.base64);
   try {
-    const saved = await api<{ id?: string; url: string; avatar?: string }>("/uploads/image-json", {
+    if (opts.asAvatar) {
+      const me = await api<{ avatar?: string; avatarUrl?: string }>("/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify({ avatarBase64: data }),
+      });
+      const url = me.avatar || me.avatarUrl;
+      if (!url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");
+      return { url, avatar: url };
+    }
+    const saved = await api<{ id?: string; url: string; avatar?: string }>("/uploads/image", {
       method: "POST",
       body: JSON.stringify({
         data,
         contentType: "image/jpeg",
         fileName: `photo-${Date.now()}.jpg`,
-        asAvatar: !!opts.asAvatar,
       }),
     });
     if (!saved?.url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");

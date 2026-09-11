@@ -36,9 +36,9 @@ export async function imageToJpegBase64(uri: string, fallbackBase64?: string | n
         { compress, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
       const data = stripDataUrl(out.base64 || "");
-      if (data && data.length <= 450_000) return data;
-      width = Math.max(320, Math.round(width * 0.75));
-      compress = Math.max(0.35, compress - 0.08);
+      if (data && data.length <= 280_000) return data;
+      width = Math.max(280, Math.round(width * 0.75));
+      compress = Math.max(0.32, compress - 0.08);
       if (i === 4 && data) return data;
     }
   } catch {

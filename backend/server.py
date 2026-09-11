@@ -224,6 +224,8 @@ class UserUpdate(BaseModel):
     shopName: Optional[str] = None
     avatar: Optional[str] = None
     avatarUrl: Optional[str] = None
+    avatarBase64: Optional[str] = None
+    photo: Optional[str] = None
 
 
 @api_router.get("/auth/me")
@@ -255,8 +257,17 @@ async def set_profile_avatar(request: Request, user: dict = Depends(current_user
 
 @api_router.patch("/profile")
 @api_router.patch("/auth/me")
-async def update_me(body: UserUpdate, user: dict = Depends(current_user)):
+async def update_me(request: Request, body: UserUpdate, user: dict = Depends(current_user)):
     raw = body.model_dump(exclude_unset=True)
+    b64 = raw.pop("avatarBase64", None) or raw.pop("photo", None)
+    if b64:
+        saved = await save_json_image(request, user, {
+            "data": b64,
+            "contentType": "image/jpeg",
+            "fileName": "avatar.jpg",
+            "asAvatar": True,
+        })
+        raw["avatar"] = saved["url"]
     if "avatarUrl" in raw:
         raw["avatar"] = raw.pop("avatarUrl")
     patch = {}
@@ -587,7 +598,9 @@ app.include_router(uploads_router.router)
 async def vercel_api_prefix(request, call_next):
     path = request.scope.get("path") or ""
     if path and not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc"):
-        request.scope["path"] = "/api" + (path if path.startswith("/") else f"/{path}")
+        new_path = "/api" + (path if path.startswith("/") else f"/{path}")
+        request.scope["path"] = new_path
+        request.scope["raw_path"] = new_path.encode("utf-8")
     return await call_next(request)
 
 app.add_middleware(
