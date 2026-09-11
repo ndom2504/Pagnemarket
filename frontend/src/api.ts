@@ -94,8 +94,7 @@ export async function uploadImage(
   const prepared = await prepareImageUpload(asset.uri, asset.base64);
   const data = await readImageBase64(prepared.uri, prepared.base64 || asset.base64);
   try {
-    const endpoint = opts.asAvatar ? "/profile/avatar" : "/uploads/image";
-    const saved = await api<{ id?: string; url: string; avatar?: string }>(endpoint, {
+    const saved = await api<{ id?: string; url: string; avatar?: string }>("/uploads/image", {
       method: "POST",
       body: JSON.stringify({
         data,

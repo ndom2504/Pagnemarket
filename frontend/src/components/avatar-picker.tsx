@@ -68,12 +68,20 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
     setUploading(true);
     setError(null);
     setOk(false);
+    let url: string;
     try {
       const up = await uploadImage(result.assets[0], { asAvatar: true });
-      await onChange(up.avatar || up.url);
-      setOk(true);
+      url = up.avatar || up.url;
     } catch (e: any) {
       setError(e.message || "Échec de l'envoi de l'image.");
+      setUploading(false);
+      return;
+    }
+    try {
+      await onChange(url);
+      setOk(true);
+    } catch (e: any) {
+      setError(e.message || "Photo envoyée, mais le profil n'a pas pu être actualisé.");
     } finally {
       setUploading(false);
     }
