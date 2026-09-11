@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
-import { AvatarPicker } from "@/src/components/avatar-picker";
+import { PhotoPicker } from "@/src/components/photo-picker";
 import { CityPicker } from "@/src/components/city-picker";
 import { CountryPicker } from "@/src/components/country-picker";
 import { countryByName, type Country } from "@/src/countries";
@@ -38,7 +38,19 @@ export default function SettingsScreen() {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
 
-  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}` || user?.firstName?.charAt(0) || "P";
+  const onAvatarChange = async (imgs: string[]) => {
+    const next = imgs[0] || "";
+    setErr(null);
+    setOk(false);
+    try {
+      await updateProfile({ avatar: next, avatarUrl: next || null });
+      setAvatar(next);
+      await refresh();
+      setOk(true);
+    } catch (e: any) {
+      setErr(e.message || "Impossible d'enregistrer la photo");
+    }
+  };
 
   const onSave = async () => {
     setErr(null);
@@ -86,25 +98,10 @@ export default function SettingsScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40, gap: 4 }}
         keyboardShouldPersistTaps="handled"
       >
-        <AvatarPicker
-          uri={avatar ? mediaUrl(avatar) : undefined}
-          initials={initials}
-          onChange={async (url) => {
-            setErr(null);
-            setOk(false);
-            try {
-              if (url) {
-                setAvatar(url);
-              } else {
-                await updateProfile({ avatarUrl: null, avatar: null });
-                setAvatar("");
-              }
-              await refresh();
-              setOk(true);
-            } catch (e: any) {
-              setErr(e.message || "Impossible d'enregistrer la photo");
-            }
-          }}
+        <PhotoPicker
+          variant="avatar"
+          images={avatar ? [mediaUrl(avatar)] : []}
+          onChange={onAvatarChange}
         />
 
         <Text style={styles.section}>Identité</Text>

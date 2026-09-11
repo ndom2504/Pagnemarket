@@ -282,6 +282,7 @@ async def set_profile_avatar(request: Request, user: dict = Depends(current_user
 
 @api_router.patch("/profile")
 @api_router.patch("/auth/me")
+@api_router.put("/auth/me")
 async def update_me(request: Request, body: UserUpdate, user: dict = Depends(current_user)):
     raw = body.model_dump(exclude_unset=True)
     b64 = raw.pop("avatarBase64", None) or raw.pop("photo", None)

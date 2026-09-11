@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = async (data: Partial<User>) => {
     const me = await api<User>("/auth/me", {
-      method: "PATCH",
+      method: "PUT",
       body: JSON.stringify(data),
     });
     setUser(me);

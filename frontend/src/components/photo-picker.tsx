@@ -4,12 +4,15 @@ import { useState } from "react";
 import { ActivityIndicator, Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { uploadImage } from "@/src/api";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 type Props = {
   images: string[];
-  onChange: (images: string[]) => void;
+  onChange: (images: string[]) => void | Promise<void>;
   max?: number;
+  variant?: "grid" | "avatar";
+  fallbackUri?: string;
 };
 
 type Source = "camera" | "gallery";
@@ -17,7 +20,10 @@ type Source = "camera" | "gallery";
 /**
  * Photo picker with contextual permission handling (check -> explain -> request -> settings fallback).
  */
-export function PhotoPicker({ images, onChange, max = 5 }: Props) {
+export function PhotoPicker({ images, onChange, max = 5, variant = "grid", fallbackUri }: Props) {
+  const isAvatar = variant === "avatar";
+  if (isAvatar) max = 1;
+  const remaining = isAvatar ? 1 : max - images.length;
   const [sheet, setSheet] = useState(false);
   const [explain, setExplain] = useState<Source | null>(null);
   const [blocked, setBlocked] = useState<Source | null>(null);
@@ -51,9 +57,10 @@ export function PhotoPicker({ images, onChange, max = 5 }: Props) {
     const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: ["images"],
       quality: 0.75,
-      allowsMultipleSelection: source === "gallery",
-      selectionLimit: Math.max(1, max - images.length),
-      allowsEditing: false,
+      allowsMultipleSelection: source === "gallery" && !isAvatar,
+      selectionLimit: Math.max(1, remaining),
+      allowsEditing: isAvatar,
+      aspect: isAvatar ? [1, 1] : undefined,
       base64: true,
     };
     const result =
@@ -62,11 +69,11 @@ export function PhotoPicker({ images, onChange, max = 5 }: Props) {
     setUploading(true);
     try {
       const urls: string[] = [];
-      for (const a of result.assets.slice(0, max - images.length)) {
-        const up = await uploadImage(a);
+      for (const a of result.assets.slice(0, Math.max(1, remaining))) {
+        const up = await uploadImage(a, { asAvatar: isAvatar });
         urls.push(up.url);
       }
-      onChange([...images, ...urls]);
+      await onChange(isAvatar ? urls.slice(0, 1) : [...images, ...urls]);
     } catch (e: any) {
       setError(e.message || "Échec de l'envoi");
     } finally {
@@ -83,6 +90,32 @@ export function PhotoPicker({ images, onChange, max = 5 }: Props) {
 
   return (
     <View style={{ gap: 10 }}>
+      {isAvatar ? (
+        <View style={{ alignItems: "center", gap: 10 }}>
+          <Pressable testID="avatar-pick" style={styles.avatarWrap} onPress={() => setSheet(true)} disabled={uploading}>
+            {images[0] || fallbackUri ? (
+              <Image source={{ uri: mediaUrl(images[0] || fallbackUri) }} style={styles.avatarImg} contentFit="cover" />
+            ) : (
+              <View style={[styles.avatarImg, styles.avatarFallback]} />
+            )}
+            {uploading && (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator color={colors.onSurfaceInverse} />
+              </View>
+            )}
+            <View style={styles.avatarBadge}>
+              <Icon name="camera" size={14} color={colors.onBrandSecondary} />
+            </View>
+          </Pressable>
+          <Text style={styles.hint}>{uploading ? "Envoi de la photo…" : "Touchez pour changer la photo"}</Text>
+          {images[0] ? (
+            <Pressable testID="avatar-remove" onPress={() => void onChange([])} style={{ padding: 4 }}>
+              <Text style={styles.removeLink}>Retirer la photo</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
+        <>
       <View style={styles.grid}>
         {images.map((u, i) => (
           <View key={u} style={styles.thumbWrap} testID={`photo-thumb-${i}`}>
@@ -118,25 +151,27 @@ export function PhotoPicker({ images, onChange, max = 5 }: Props) {
       <Text style={styles.hint}>
         {images.length}/{max} photos · La première est la photo principale
       </Text>
+        </>
+      )}
       {error && <Text style={styles.err}>{error}</Text>}
 
       {/* Source sheet */}
       <Modal visible={sheet} transparent animationType="fade" onRequestClose={() => setSheet(false)}>
         <Pressable style={styles.backdrop} onPress={() => setSheet(false)}>
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Ajouter une photo</Text>
+            <Text style={styles.sheetTitle}>{isAvatar ? "Photo de profil" : "Ajouter une photo"}</Text>
             <Pressable testID="source-camera" style={styles.sheetRow} onPress={() => start("camera")}>
               <View style={styles.sheetIcon}><Icon name="camera" size={18} /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetLbl}>Prendre une photo</Text>
-                <Text style={styles.sheetSub}>Photographiez votre tissu maintenant</Text>
+                <Text style={styles.sheetSub}>{isAvatar ? "Utilisez votre appareil photo" : "Photographiez votre tissu maintenant"}</Text>
               </View>
             </Pressable>
             <Pressable testID="source-gallery" style={styles.sheetRow} onPress={() => start("gallery")}>
               <View style={styles.sheetIcon}><Icon name="image" size={18} /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetLbl}>Choisir dans la galerie</Text>
-                <Text style={styles.sheetSub}>Jusqu'à {max - images.length} photos</Text>
+                <Text style={styles.sheetSub}>{isAvatar ? "Une photo carrée est idéale" : `Jusqu'à ${remaining} photos`}</Text>
               </View>
             </Pressable>
           </View>
@@ -155,7 +190,11 @@ export function PhotoPicker({ images, onChange, max = 5 }: Props) {
             </Text>
             <Text style={styles.dialogTxt}>
               {explain === "camera"
-                ? "PagneMarket utilise votre appareil photo pour photographier vos tissus et les publier dans votre boutique."
+                ? isAvatar
+                  ? "PagneMarket utilise votre appareil photo pour prendre votre photo de profil."
+                  : "PagneMarket utilise votre appareil photo pour photographier vos tissus et les publier dans votre boutique."
+                : isAvatar
+                ? "PagneMarket accède à votre galerie pour choisir votre photo de profil."
                 : "PagneMarket accède à votre galerie pour publier les photos de vos tissus dans votre boutique."}
             </Text>
             <Pressable testID="perm-continue" style={styles.dialogBtn} onPress={confirmExplain}>
@@ -178,7 +217,7 @@ export function PhotoPicker({ images, onChange, max = 5 }: Props) {
             <Text style={styles.dialogTitle}>Permission refusée</Text>
             <Text style={styles.dialogTxt}>
               Autorisez l'accès {blocked === "camera" ? "à l'appareil photo" : "aux photos"} dans les réglages pour
-              ajouter des photos de vos tissus.
+              {isAvatar ? " changer votre photo de profil." : " ajouter des photos de vos tissus."}
             </Text>
             <Pressable testID="perm-settings" style={styles.dialogBtn} onPress={openSettings}>
               <Text style={styles.dialogBtnTxt}>Ouvrir les réglages</Text>
@@ -194,6 +233,22 @@ export function PhotoPicker({ images, onChange, max = 5 }: Props) {
 }
 
 const styles = StyleSheet.create({
+  avatarWrap: { width: 112, height: 112, borderRadius: 999 },
+  avatarImg: {
+    width: 112, height: 112, borderRadius: 999, backgroundColor: colors.surfaceSecondary,
+    borderWidth: 3, borderColor: colors.surfaceInverse,
+  },
+  avatarFallback: { backgroundColor: colors.surfaceInverse },
+  avatarOverlay: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 999,
+    backgroundColor: "rgba(17,17,17,0.45)", alignItems: "center", justifyContent: "center",
+  },
+  avatarBadge: {
+    position: "absolute", bottom: 2, right: 2, width: 34, height: 34, borderRadius: 999,
+    backgroundColor: colors.brandSecondary, alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: colors.surface,
+  },
+  removeLink: { color: colors.brandSecondary, fontSize: 12, fontWeight: "500" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   thumbWrap: { width: 96, height: 96, borderRadius: 12, overflow: "hidden", backgroundColor: colors.surfaceSecondary },
   thumb: { width: "100%", height: "100%" },
