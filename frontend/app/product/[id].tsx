@@ -141,9 +141,32 @@ export default function ProductDetail() {
                 <Text style={styles.vendorLoc}>{p.location}</Text>
               </View>
             </View>
-            <Pressable style={styles.followBtn}>
-              <Text style={styles.followText}>Suivre</Text>
-            </Pressable>
+            {p.supplierId ? (
+              <Pressable
+                testID="contact-supplier"
+                style={styles.followBtn}
+                onPress={() => {
+                  api("/messages/send", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      toUserId: p.supplierId,
+                      toName: p.supplierName,
+                      text: `Bonjour, je suis intéressé(e) par « ${p.name} ».`,
+                    }),
+                  })
+                    .then((msg: any) => {
+                      if (msg?.conversationId) router.push(`/conversation/${msg.conversationId}`);
+                    })
+                    .catch(() => {});
+                }}
+              >
+                <Text style={styles.followText}>Message</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={styles.followBtn}>
+                <Text style={styles.followText}>Suivre</Text>
+              </Pressable>
+            )}
           </View>
 
           <View>

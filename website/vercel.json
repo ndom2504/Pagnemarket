@@ -1,0 +1,19 @@
+{
+  "buildCommand": "npm ci && npm run build",
+  "outputDirectory": "out",
+  "framework": null,
+  "redirects": [
+    { "source": "/", "destination": "/fr/", "permanent": false },
+    { "source": "/app", "destination": "/fr/app/", "permanent": false },
+    { "source": "/app/", "destination": "/fr/app/", "permanent": false }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}

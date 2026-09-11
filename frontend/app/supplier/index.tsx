@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { PAYMENT_LABEL, SUPPLIER_STATUS_FLOW, statusOf } from "@/src/order-status";
 import { colors } from "@/src/theme";
 
@@ -27,6 +28,7 @@ export default function SupplierDashboard() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const [statusFor, setStatusFor] = useState<any | null>(null);
+  const avatar = user?.avatarUrl || user?.avatar;
 
   const stats = useQuery({
     queryKey: ["supplier-stats"],
@@ -56,12 +58,18 @@ export default function SupplierDashboard() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable testID="supplier-back" style={styles.iconBtn} onPress={() => router.back()}>
-          <Icon name="arrow-left" size={20} color={colors.onSurface} />
+        <Pressable testID="supplier-home-avatar" onPress={() => router.push("/supplier/profile")}>
+          {avatar ? (
+            <Image source={{ uri: mediaUrl(avatar) }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarInitial}>{(user?.firstName?.[0] || "F").toUpperCase()}</Text>
+            </View>
+          )}
         </Pressable>
-        <View style={{ flex: 1, alignItems: "center" }}>
+        <View style={{ flex: 1 }}>
           <Text style={styles.title}>Espace fournisseur</Text>
-          <Text style={styles.subtitle}>
+          <Text style={styles.subtitle} numberOfLines={1}>
             {user?.shopName || `${user?.firstName} ${user?.lastName}`}
             {user?.city || user?.country
               ? ` · ${[user?.city, user?.country].filter(Boolean).join(", ")}`
@@ -77,7 +85,7 @@ export default function SupplierDashboard() {
         <ActivityIndicator style={{ marginTop: 48 }} color={colors.brandPrimary} />
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 16 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }}
           refreshControl={<RefreshControl refreshing={stats.isRefetching} onRefresh={() => stats.refetch()} />}
           showsVerticalScrollIndicator={false}
           testID="supplier-dashboard"
@@ -276,9 +284,28 @@ function Kpi({ icon, label, value, hint, testID }: { icon: any; label: string; v
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.divider, gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+    gap: 12,
   },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 2,
+    borderColor: colors.surfaceInverse,
+  },
+  avatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surfaceInverse,
+  },
+  avatarInitial: { color: colors.onSurfaceInverse, fontSize: 16, fontWeight: "500" },
   iconBtn: {
     width: 40, height: 40, borderRadius: 999, backgroundColor: colors.surfaceSecondary,
     alignItems: "center", justifyContent: "center",

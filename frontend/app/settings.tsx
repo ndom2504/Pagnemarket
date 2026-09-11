@@ -17,6 +17,7 @@ import { PhotoPicker } from "@/src/components/photo-picker";
 import { CityPicker } from "@/src/components/city-picker";
 import { CountryPicker } from "@/src/components/country-picker";
 import { countryByName, type Country } from "@/src/countries";
+import { homeForRoles } from "@/src/home-route";
 import { Icon } from "@/src/icon";
 import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
@@ -26,6 +27,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { user, updateProfile, refresh } = useAuth();
   const isSupplier = !!user?.roles?.includes("supplier");
+  const isTailor = !!user?.roles?.includes("tailor");
 
   const [firstName, setFirstName] = useState(user?.firstName || "");
   const [lastName, setLastName] = useState(user?.lastName || "");
@@ -33,6 +35,7 @@ export default function SettingsScreen() {
   const [country, setCountry] = useState<Country>(() => countryByName(user?.country));
   const [city, setCity] = useState(user?.city || "");
   const [shopName, setShopName] = useState(user?.shopName || "");
+  const [specialty, setSpecialty] = useState(user?.specialty || "");
   const [avatar, setAvatar] = useState(user?.avatarUrl || user?.avatar || "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -59,8 +62,8 @@ export default function SettingsScreen() {
       setErr("Indiquez votre prénom et votre nom");
       return;
     }
-    if (isSupplier && !city.trim()) {
-      setErr("Indiquez la ville de votre boutique");
+    if ((isSupplier || isTailor) && !city.trim()) {
+      setErr(isSupplier ? "Indiquez la ville de votre boutique" : "Indiquez la ville de votre atelier");
       return;
     }
     setSaving(true);
@@ -72,6 +75,7 @@ export default function SettingsScreen() {
         country: country.name,
         city: city.trim() || undefined,
         shopName: isSupplier ? shopName.trim() || undefined : undefined,
+        specialty: isTailor ? specialty.trim() || undefined : undefined,
       });
       setOk(true);
     } catch (e: any) {
@@ -87,7 +91,14 @@ export default function SettingsScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
-        <Pressable testID="settings-back" style={styles.iconBtn} onPress={() => router.back()}>
+        <Pressable
+          testID="settings-back"
+          style={styles.iconBtn}
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace(homeForRoles(user?.roles));
+          }}
+        >
           <Icon name="arrow-left" size={20} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.title}>Paramètres</Text>
@@ -156,6 +167,24 @@ export default function SettingsScreen() {
             />
             <Text style={styles.hint}>
               Les clients voient {city ? `${city}, ` : ""}
+              {country.name}.
+            </Text>
+          </>
+        )}
+
+        {isTailor && (
+          <>
+            <Text style={styles.section}>Atelier</Text>
+            <TextInput
+              testID="settings-specialty"
+              style={styles.input}
+              placeholder="Spécialité (ex. robes, boubou)"
+              placeholderTextColor={colors.muted}
+              value={specialty}
+              onChangeText={setSpecialty}
+            />
+            <Text style={styles.hint}>
+              Visible par les clients de {city ? `${city}, ` : ""}
               {country.name}.
             </Text>
           </>

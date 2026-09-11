@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
 import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
@@ -18,6 +19,7 @@ import { colors } from "@/src/theme";
 export default function Messages() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const convs = useQuery({ queryKey: ["conversations"], queryFn: () => api("/conversations") });
   const creators = useQuery({ queryKey: ["creators"], queryFn: () => api("/creators") });
 
@@ -36,7 +38,7 @@ export default function Messages() {
           <Icon name="message-circle" size={48} color={colors.muted} />
           <Text style={styles.emptyTitle}>Aucune conversation</Text>
           <Text style={styles.emptySub}>
-            Contactez un tailleur pour faire coudre votre tissu.
+            Contactez un fournisseur depuis un produit, ou un tailleur pour faire coudre votre tissu.
           </Text>
           <Text style={styles.section}>Tailleurs</Text>
           <FlatList
@@ -63,16 +65,26 @@ export default function Messages() {
           keyExtractor={(i) => i.id}
           contentContainerStyle={{ padding: 16, gap: 8 }}
           renderItem={({ item }) => {
-            const other = (item.participants as any[]).find((p: any) => p.id !== item.participants[0].id);
+            const other =
+              (item.participants as any[])?.find((p: any) => p.id !== user?.id) ||
+              item.participants?.[0];
             return (
-              <Pressable style={styles.convRow} testID={`conv-${item.id}`}>
+              <Pressable
+                style={styles.convRow}
+                testID={`conv-${item.id}`}
+                onPress={() => router.push(`/conversation/${item.id}`)}
+              >
                 <View style={styles.convAvatar}>
-                  <Text style={{ color: colors.onSurfaceInverse, fontWeight: "500" }}>
-                    {(other?.name || "?").charAt(0)}
-                  </Text>
+                  {other?.avatar ? (
+                    <Image source={{ uri: mediaUrl(other.avatar) }} style={styles.avatarImg} contentFit="cover" />
+                  ) : (
+                    <Text style={{ color: colors.onSurfaceInverse, fontWeight: "500" }}>
+                      {(other?.name || "?").charAt(0)}
+                    </Text>
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.convName}>{other?.name}</Text>
+                  <Text style={styles.convName}>{other?.name || "Conversation"}</Text>
                   <Text numberOfLines={1} style={styles.convLast}>
                     {item.lastMessage}
                   </Text>
@@ -104,6 +116,7 @@ const styles = StyleSheet.create({
     width: 80,
   },
   avatar: { width: 60, height: 60, borderRadius: 999 },
+  avatarImg: { width: 48, height: 48, borderRadius: 999 },
   creatorName: { fontSize: 12, color: colors.onSurface, textAlign: "center" },
   convRow: {
     flexDirection: "row",
@@ -122,6 +135,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceInverse,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   convName: { fontWeight: "500", color: colors.onSurface, fontSize: 14 },
   convLast: { color: colors.muted, fontSize: 12, marginTop: 2 },

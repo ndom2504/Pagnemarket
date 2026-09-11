@@ -13,15 +13,16 @@ export type User = {
   avatar?: string | null;
   avatarUrl?: string | null;
   shopName?: string;
+  specialty?: string | null;
 };
 
 type Ctx = {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (data: any) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<User>;
+  signUp: (data: any) => Promise<User>;
   sendOtp: (phone: string, countryIso?: string) => Promise<{ phone: string }>;
-  verifyOtp: (data: any) => Promise<void>;
+  verifyOtp: (data: any) => Promise<User>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<User>;
@@ -63,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     await setToken(r.token);
     setUser(r.user);
+    return r.user;
   };
 
   const signUp = async (data: any) => {
@@ -73,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     await setToken(r.token);
     setUser(r.user);
+    return r.user;
   };
 
   const sendOtp = async (phone: string, countryIso?: string) => {
@@ -91,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     await setToken(r.token);
     setUser(r.user);
+    return r.user;
   };
 
   const signOut = async () => {

@@ -21,6 +21,18 @@ import { ALL_COUNTRIES, countryByName, type Country } from "@/src/countries";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
 
+const USAGE = [
+  { id: "all", label: "Tous usages" },
+  { id: "femme", label: "Femme" },
+  { id: "homme", label: "Homme" },
+  { id: "enfant", label: "Enfant" },
+  { id: "mariage", label: "Mariage" },
+  { id: "ceremonie", label: "Cérémonie" },
+  { id: "traditionnel", label: "Traditionnel" },
+  { id: "business", label: "Business" },
+  { id: "haute-couture", label: "Haute couture" },
+];
+
 export default function Shop() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -28,30 +40,35 @@ export default function Shop() {
   const params = useLocalSearchParams<{ category?: string }>();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>(params.category || "all");
+  const [usage, setUsage] = useState("all");
   const [sort, setSort] = useState<string>("recent");
   const [country, setCountry] = useState<Country>(ALL_COUNTRIES);
   const [city, setCity] = useState("all");
   const [countryReady, setCountryReady] = useState(false);
 
   useEffect(() => {
-    if (countryReady) return;
-    if (user?.country) {
+    if (countryReady || !user) return;
+    if (user.country) {
       setCountry(countryByName(user.country));
       if (user.city) setCity(user.city);
-      setCountryReady(true);
     }
-  }, [user?.country, user?.city, countryReady]);
+    setCountryReady(true);
+  }, [user, countryReady]);
+
+  useEffect(() => {
+    if (params.category) setCat(String(params.category));
+  }, [params.category]);
 
   const countryParam = country.iso === "ALL" ? "all" : country.name;
   const cityParam = country.iso === "ALL" || city === "all" ? "all" : city;
   const categories = useQuery({ queryKey: ["categories"], queryFn: () => api("/categories") });
   const products = useQuery({
-    queryKey: ["products", cat, q, sort, countryParam, cityParam],
+    queryKey: ["products", cat, q, sort, countryParam, cityParam, usage],
     queryFn: () =>
       api(
         `/products?category=${cat}&q=${encodeURIComponent(q)}&sort=${
           sort === "recent" ? "" : sort
-        }&country=${encodeURIComponent(countryParam)}&city=${encodeURIComponent(cityParam)}`
+        }&country=${encodeURIComponent(countryParam)}&city=${encodeURIComponent(cityParam)}&usage=${encodeURIComponent(usage)}`
       ),
   });
 
@@ -132,6 +149,23 @@ export default function Shop() {
             />
           )}
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 6, paddingVertical: 4 }}
+        >
+          {USAGE.map((u) => (
+            <Pressable
+              key={u.id}
+              testID={`usage-${u.id}`}
+              onPress={() => setUsage(u.id)}
+              style={[styles.sortChip, usage === u.id && styles.sortChipActive]}
+            >
+              <Text style={[styles.sortChipText, usage === u.id && styles.sortChipTextActive]}>{u.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
         <ScrollView
           horizontal

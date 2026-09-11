@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
+import { categoryImageSource } from "@/src/category-images";
 import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
@@ -103,7 +104,7 @@ export default function Home() {
       </View>
 
       {/* Categories */}
-      <SectionTitle title="Catégories" />
+      <SectionTitle title="Types de pagne" />
       {categories.isLoading ? (
         <ActivityIndicator style={{ marginVertical: 24 }} color={colors.brandPrimary} />
       ) : (
@@ -113,14 +114,16 @@ export default function Home() {
           keyExtractor={(i: any) => i.id}
           contentContainerStyle={styles.chipsRow}
           showsHorizontalScrollIndicator={false}
-          renderItem={({ item }: any) => (
+          renderItem={({ item }: any) => {
+            const img = categoryImageSource(item);
+            return (
             <Pressable
               testID={`category-${item.slug}`}
               style={styles.catCard}
               onPress={() => router.push(`/(tabs)/shop?category=${item.slug}`)}
             >
-              {item.image ? (
-                <Image source={{ uri: item.image }} style={styles.catImage} contentFit="cover" />
+              {img ? (
+                <Image source={img} style={styles.catImage} contentFit="cover" />
               ) : (
                 <View style={[styles.catImage, { backgroundColor: colors.surfaceInverse }]} />
               )}
@@ -130,7 +133,8 @@ export default function Home() {
               />
               <Text style={styles.catName}>{item.name}</Text>
             </Pressable>
-          )}
+            );
+          }}
         />
       )}
 
@@ -391,8 +395,8 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: colors.surfaceSecondary,
   },
-  catImage: { width: "100%", height: "100%" },
-  catName: { color: colors.onSurfaceInverse, fontWeight: "500", fontSize: 14 },
+  catImage: { ...StyleSheet.absoluteFillObject },
+  catName: { color: colors.onSurfaceInverse, fontWeight: "500", fontSize: 14, zIndex: 2 },
   prodCard: {
     width: 200,
     borderRadius: 12,

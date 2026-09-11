@@ -164,6 +164,7 @@ async def _from_request(request: Request, user: dict):
 @router.post("/upload")
 @router.post("/uploads/image")
 async def upload_image(request: Request, user: dict = Depends(current_user)):
+    """Accept JSON {data, contentType} or multipart file. Never require File() (Expo/web JSON would 422)."""
     return await _from_request(request, user)
 
 

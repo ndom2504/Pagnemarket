@@ -1,0 +1,498 @@
+import type { Locale } from "./constants";
+
+export type Dictionary = typeof fr;
+
+const fr = {
+  meta: {
+    title: "PagneMarket — L'Afrique sans frontières",
+    description:
+      "PagneMarket connecte les communautés du monde autour du pagne, des tissus africains, de la mode, des créateurs et du savoir-faire africain.",
+    keywords:
+      "pagne africain, wax, tissus africains, mode africaine, créateurs africains, tailleurs africains, African fashion, African fabrics, African textile, pagne wax, diaspora africaine, culture africaine",
+  },
+  nav: {
+    discover: "Découvrir",
+    vision: "Notre vision",
+    fabrics: "Tissus",
+    creators: "Créateurs",
+    community: "Communauté",
+    app: "L'application",
+    download: "Télécharger l'application",
+    sell: "Vendre",
+  },
+  hero: {
+    brand: "PagneMarket",
+    title: "L'Afrique sans frontières.",
+    subtitle:
+      "Connecter les communautés du monde autour du pagne, de la culture et de la créativité africaine.",
+    ctaPrimary: "Découvrir PagneMarket",
+    ctaSecondary: "Télécharger l'application",
+    available: "Bientôt disponible sur",
+  },
+  manifesto: {
+    lines: ["Un tissu nous relie.", "Une culture nous rassemble.", "Un monde nous attend."],
+    editorial:
+      "Le pagne n'est pas seulement un tissu. Il porte une histoire, une identité, une créativité et une appartenance. De l'Afrique à sa diaspora, des créateurs aux passionnés de mode, PagneMarket crée un espace où ces histoires peuvent voyager, se rencontrer et continuer à évoluer. Notre ambition est de connecter les communautés du monde autour du textile africain et de contribuer au rayonnement de la culture et de la créativité africaines au-delà des frontières.",
+  },
+  moreThanFabric: {
+    title: "Plus qu'un tissu.\nUne identité. Un héritage. Une histoire.",
+    body: "À travers ses couleurs, ses motifs et ses usages, le textile raconte. Il raconte nos histoires, nos traditions, nos générations et notre créativité. PagneMarket veut donner à cette richesse un espace numérique capable de la faire voyager partout dans le monde.",
+  },
+  afro: {
+    kicker: "Afro-connexion",
+    title: "Bienvenue dans l'Afro-connexion.",
+    definition:
+      "L'Afro-connexion représente la capacité de PagneMarket à connecter les communautés africaines, la diaspora et les passionnés de culture africaine partout dans le monde.",
+    body: "Une nouvelle génération connecte l'Afrique au monde. PagneMarket rassemble celles et ceux qui créent, portent, vendent, découvrent et transmettent la culture textile africaine.",
+    tags: ["Textile", "Mode", "Culture", "Créativité", "Commerce", "Savoir-faire", "Communautés"],
+  },
+  impact: {
+    title: "Notre impact",
+    subtitle: "Cinq piliers pour faire rayonner la culture textile africaine.",
+    pillars: [
+      {
+        n: "01",
+        title: "Héritage",
+        text: "Préserver et transmettre les savoir-faire et patrimoines textiles africains.",
+      },
+      {
+        n: "02",
+        title: "Connexion",
+        text: "Relier l'Afrique, sa diaspora et les communautés du monde.",
+      },
+      {
+        n: "03",
+        title: "Créativité",
+        text: "Donner de la visibilité aux stylistes, tailleurs, designers et créateurs.",
+      },
+      {
+        n: "04",
+        title: "Communauté",
+        text: "Créer un espace où les passionnés peuvent partager, découvrir et échanger.",
+      },
+      {
+        n: "05",
+        title: "Rayonnement",
+        text: "Faire connaître la richesse culturelle et créative africaine à l'échelle mondiale.",
+      },
+    ],
+  },
+  ecosystem: {
+    title: "Un écosystème vivant",
+    subtitle: "PagneMarket relie les acteurs du textile, de la mode et de la culture.",
+    center: "PAGNE MARKET",
+    nodes: [
+      "Tissus",
+      "Acheteurs",
+      "Vendeurs",
+      "Tailleurs",
+      "Créateurs",
+      "Communautés",
+      "Fournisseurs",
+      "Marques",
+    ],
+  },
+  world: {
+    title: "Afrique ↔ Diaspora ↔ Monde",
+    subtitle: "De l'Afrique au monde.",
+    body: "Les cultures voyagent. Les histoires traversent les frontières. Les communautés se connectent. PagneMarket veut devenir un pont numérique entre l'Afrique, sa diaspora et le monde.",
+    note: "Une vision internationale — pas une carte de présence déjà établie.",
+    regions: [
+      "Afrique",
+      "Afrique de l'Ouest",
+      "Afrique centrale",
+      "Afrique australe",
+      "Canada",
+      "France",
+      "Belgique",
+      "États-Unis",
+      "Royaume-Uni",
+      "Europe",
+    ],
+  },
+  marketplace: {
+    title: "Découvrez les tissus qui racontent l'Afrique.",
+    cta: "Explorer les tissus",
+    categories: [
+      "Wax",
+      "Bazin",
+      "Kente",
+      "Bogolan",
+      "Ndop",
+      "Aso Oke",
+      "Adire",
+      "Indigo",
+      "Shweshwe",
+      "Kita",
+      "Raphia",
+      "Autres textiles",
+    ],
+  },
+  creators: {
+    title: "Ceux qui donnent vie au tissu.",
+    body: "Derrière chaque création, il y a un savoir-faire. PagneMarket permet aux tailleurs, stylistes, designers et créateurs de présenter leur univers, leurs modèles et leur savoir-faire à une communauté internationale.",
+    cta: "Découvrir les créateurs",
+    ctaSecondary: "Rejoindre PagneMarket",
+  },
+  vendors: {
+    title: "Votre tissu mérite d'être vu par le monde.",
+    body: "PagneMarket offre aux vendeurs et fournisseurs un espace pour présenter leurs produits, développer leur visibilité et toucher une clientèle locale et internationale.",
+    cta: "Devenir vendeur",
+  },
+  community: {
+    title: "Une communauté.\nUne culture.\nUn style.",
+    body: "PagneMarket ne se limite pas au commerce. C'est un espace de découverte, d'expression et de connexion autour de la culture africaine.",
+    items: [
+      "Inspirations",
+      "Créations",
+      "Tissus",
+      "Modèles",
+      "Événements",
+      "Tendances",
+      "Discussions",
+      "Créateurs",
+      "Communautés",
+    ],
+    cta: "Rejoindre la communauté",
+  },
+  app: {
+    title: "Toute l'expérience PagneMarket dans votre poche.",
+    body: "Découvrez, connectez-vous, achetez, créez et partagez depuis votre smartphone.",
+    cta: "Télécharger PagneMarket",
+    screens: [
+      "Accueil",
+      "Marketplace",
+      "Tissus",
+      "Créateurs",
+      "Messagerie",
+      "IA / création",
+    ],
+    qrLabel: "Scannez pour télécharger",
+  },
+  ai: {
+    title: "Imaginez. Créez. Portez.",
+    body: "La technologie peut aussi devenir un outil de création. PagneMarket explore l'utilisation de l'intelligence artificielle pour permettre aux utilisateurs d'imaginer de nouvelles façons de transformer les tissus africains en créations contemporaines.",
+    steps: ["Photo d'un motif", "Idée de création", "Modèle", "Tenue"],
+    cta: "Explorer la création",
+  },
+  techImpact: {
+    title: "La technologie au service de la culture.",
+    body: "PagneMarket est une initiative portée par Export Monde Prestige Inc., entreprise canadienne spécialisée dans le développement de solutions numériques à impact social et culturel.",
+    believes: [
+      "connecter les communautés",
+      "valoriser les talents",
+      "soutenir l'entrepreneuriat",
+      "préserver les savoir-faire",
+      "favoriser les échanges",
+      "créer de nouvelles opportunités",
+      "contribuer au rayonnement des cultures africaines",
+    ],
+  },
+  company: {
+    title: "Une initiative d'Export Monde Prestige Inc.",
+    body: "Basée au Canada, Export Monde Prestige Inc. développe des solutions numériques destinées à créer un impact social, culturel et économique. PagneMarket s'inscrit dans cette vision : utiliser la technologie pour connecter les personnes, les cultures et les opportunités.",
+    cta: "Découvrir Export Monde Prestige Inc.",
+  },
+  philosophy: {
+    title: "Fiers de nos racines. Ouverts sur le monde.",
+    lines: [
+      "Valoriser notre héritage sans fermer nos frontières.",
+      "Faire rayonner notre culture sans exclure les autres.",
+      "Créer des ponts plutôt que des barrières.",
+    ],
+    note: "Fierté culturelle + ouverture au monde.",
+  },
+  how: {
+    title: "Comment ça marche",
+    steps: [
+      { n: "01", title: "Découvrir", text: "Explorez les tissus, styles et créateurs." },
+      { n: "02", title: "Se connecter", text: "Rencontrez vendeurs, tailleurs, créateurs et communautés." },
+      { n: "03", title: "Créer", text: "Imaginez votre style et découvrez de nouvelles créations." },
+      { n: "04", title: "Acheter & partager", text: "Achetez, commandez, partagez et faites vivre la culture." },
+    ],
+  },
+  final: {
+    title: "Le pagne africain n'a pas de frontières.",
+    subtitle: "Rejoignez une communauté qui connecte l'Afrique, sa diaspora et le monde.",
+    cta: "Télécharger PagneMarket",
+    brand: "PagneMarket",
+    tagline: "L'Afrique sans frontières.",
+  },
+  footer: {
+    tagline: "L'Afrique sans frontières.",
+    manifesto: ["Un tissu nous relie.", "Une culture nous rassemble.", "Un monde nous attend."],
+    discover: "Découvrir",
+    professionals: "Professionnels",
+    company: "Entreprise",
+    support: "Support",
+    sell: "Vendre",
+    becomeCreator: "Devenir créateur",
+    becomeSupplier: "Devenir fournisseur",
+    about: "À propos",
+    emp: "Export Monde Prestige Inc.",
+    contact: "Contact",
+    faq: "FAQ",
+    privacy: "Confidentialité",
+    terms: "Conditions",
+    languages: "Langues",
+    rights: "© Export Monde Prestige Inc. Tous droits réservés.",
+  },
+  sticky: {
+    download: "Télécharger l'application",
+  },
+  appPage: {
+    title: "Télécharger PagneMarket",
+    subtitle: "Disponible bientôt sur App Store et Google Play.",
+    ios: "Ouvrir l'App Store",
+    android: "Ouvrir Google Play",
+    desktop: "Choisissez votre plateforme",
+    back: "Retour au site",
+  },
+};
+
+const en: Dictionary = {
+  meta: {
+    title: "PagneMarket — Africa without borders",
+    description:
+      "PagneMarket connects communities worldwide around African fabrics, fashion, creators, and craftsmanship.",
+    keywords:
+      "African fabric, wax print, African textiles, African fashion, African designers, African tailors, pagne, diaspora, African culture",
+  },
+  nav: {
+    discover: "Discover",
+    vision: "Our vision",
+    fabrics: "Fabrics",
+    creators: "Creators",
+    community: "Community",
+    app: "The app",
+    download: "Download the app",
+    sell: "Sell",
+  },
+  hero: {
+    brand: "PagneMarket",
+    title: "Africa without borders.",
+    subtitle:
+      "Connecting communities worldwide around African fabrics, culture, and creativity.",
+    ctaPrimary: "Discover PagneMarket",
+    ctaSecondary: "Download the app",
+    available: "Coming soon on",
+  },
+  manifesto: {
+    lines: ["One fabric connects us.", "One culture gathers us.", "One world awaits."],
+    editorial:
+      "African fabric is more than cloth. It carries history, identity, creativity, and belonging. From Africa to its diaspora, from creators to fashion lovers, PagneMarket builds a space where these stories can travel, meet, and keep evolving. Our ambition is to connect communities worldwide around African textiles and help African culture and creativity shine beyond borders.",
+  },
+  moreThanFabric: {
+    title: "More than fabric.\nAn identity. A heritage. A story.",
+    body: "Through its colors, patterns, and uses, textile tells stories — of traditions, generations, and creativity. PagneMarket gives that richness a digital home that can travel the world.",
+  },
+  afro: {
+    kicker: "Afro-connection",
+    title: "Welcome to Afro-connection.",
+    definition:
+      "Afro-connection is PagneMarket’s ability to connect African communities, the diaspora, and lovers of African culture everywhere.",
+    body: "A new generation is connecting Africa to the world. PagneMarket gathers those who create, wear, sell, discover, and pass on African textile culture.",
+    tags: ["Textile", "Fashion", "Culture", "Creativity", "Commerce", "Craft", "Communities"],
+  },
+  impact: {
+    title: "Our impact",
+    subtitle: "Five pillars to amplify African textile culture.",
+    pillars: [
+      {
+        n: "01",
+        title: "Heritage",
+        text: "Preserve and transmit African textile know-how and heritage.",
+      },
+      {
+        n: "02",
+        title: "Connection",
+        text: "Link Africa, its diaspora, and communities worldwide.",
+      },
+      {
+        n: "03",
+        title: "Creativity",
+        text: "Give visibility to stylists, tailors, designers, and creators.",
+      },
+      {
+        n: "04",
+        title: "Community",
+        text: "Build a space where enthusiasts can share, discover, and exchange.",
+      },
+      {
+        n: "05",
+        title: "Reach",
+        text: "Share African cultural and creative richness worldwide.",
+      },
+    ],
+  },
+  ecosystem: {
+    title: "A living ecosystem",
+    subtitle: "PagneMarket connects textile, fashion, and culture actors.",
+    center: "PAGNE MARKET",
+    nodes: [
+      "Fabrics",
+      "Buyers",
+      "Sellers",
+      "Tailors",
+      "Creators",
+      "Communities",
+      "Suppliers",
+      "Brands",
+    ],
+  },
+  world: {
+    title: "Africa ↔ Diaspora ↔ World",
+    subtitle: "From Africa to the world.",
+    body: "Cultures travel. Stories cross borders. Communities connect. PagneMarket aims to become a digital bridge between Africa, its diaspora, and the world.",
+    note: "An international vision — not a claim of established presence.",
+    regions: [
+      "Africa",
+      "West Africa",
+      "Central Africa",
+      "Southern Africa",
+      "Canada",
+      "France",
+      "Belgium",
+      "United States",
+      "United Kingdom",
+      "Europe",
+    ],
+  },
+  marketplace: {
+    title: "Discover fabrics that tell Africa’s stories.",
+    cta: "Explore fabrics",
+    categories: [
+      "Wax",
+      "Bazin",
+      "Kente",
+      "Bogolan",
+      "Ndop",
+      "Aso Oke",
+      "Adire",
+      "Indigo",
+      "Shweshwe",
+      "Kita",
+      "Raffia",
+      "Other textiles",
+    ],
+  },
+  creators: {
+    title: "Those who bring fabric to life.",
+    body: "Behind every creation is craft. PagneMarket helps tailors, stylists, designers, and creators present their world to an international community.",
+    cta: "Discover creators",
+    ctaSecondary: "Join PagneMarket",
+  },
+  vendors: {
+    title: "Your fabric deserves to be seen by the world.",
+    body: "PagneMarket gives sellers and suppliers a space to present products, grow visibility, and reach local and international customers.",
+    cta: "Become a seller",
+  },
+  community: {
+    title: "One community.\nOne culture.\nOne style.",
+    body: "PagneMarket is more than commerce. It is a space for discovery, expression, and connection around African culture.",
+    items: [
+      "Inspiration",
+      "Creations",
+      "Fabrics",
+      "Looks",
+      "Events",
+      "Trends",
+      "Conversations",
+      "Creators",
+      "Communities",
+    ],
+    cta: "Join the community",
+  },
+  app: {
+    title: "The full PagneMarket experience in your pocket.",
+    body: "Discover, connect, buy, create, and share from your phone.",
+    cta: "Download PagneMarket",
+    screens: ["Home", "Marketplace", "Fabrics", "Creators", "Messaging", "AI / create"],
+    qrLabel: "Scan to download",
+  },
+  ai: {
+    title: "Imagine. Create. Wear.",
+    body: "Technology can also be a creative tool. PagneMarket explores AI to help people imagine new ways to turn African fabrics into contemporary creations.",
+    steps: ["Motif photo", "Creative idea", "Pattern", "Outfit"],
+    cta: "Explore creation",
+  },
+  techImpact: {
+    title: "Technology in service of culture.",
+    body: "PagneMarket is an initiative by Export Monde Prestige Inc., a Canadian company building digital solutions with social and cultural impact.",
+    believes: [
+      "connect communities",
+      "elevate talent",
+      "support entrepreneurship",
+      "preserve craft",
+      "foster exchange",
+      "create opportunity",
+      "amplify African cultures",
+    ],
+  },
+  company: {
+    title: "An initiative by Export Monde Prestige Inc.",
+    body: "Based in Canada, Export Monde Prestige Inc. builds digital solutions for social, cultural, and economic impact. PagneMarket is part of that vision: using technology to connect people, cultures, and opportunity.",
+    cta: "Discover Export Monde Prestige Inc.",
+  },
+  philosophy: {
+    title: "Proud of our roots. Open to the world.",
+    lines: [
+      "Honor our heritage without closing our borders.",
+      "Amplify our culture without excluding others.",
+      "Build bridges rather than barriers.",
+    ],
+    note: "Cultural pride + openness to the world.",
+  },
+  how: {
+    title: "How it works",
+    steps: [
+      { n: "01", title: "Discover", text: "Explore fabrics, styles, and creators." },
+      { n: "02", title: "Connect", text: "Meet sellers, tailors, creators, and communities." },
+      { n: "03", title: "Create", text: "Imagine your style and discover new creations." },
+      { n: "04", title: "Buy & share", text: "Shop, order, share, and keep culture alive." },
+    ],
+  },
+  final: {
+    title: "African fabric has no borders.",
+    subtitle: "Join a community connecting Africa, its diaspora, and the world.",
+    cta: "Download PagneMarket",
+    brand: "PagneMarket",
+    tagline: "Africa without borders.",
+  },
+  footer: {
+    tagline: "Africa without borders.",
+    manifesto: ["One fabric connects us.", "One culture gathers us.", "One world awaits."],
+    discover: "Discover",
+    professionals: "Professionals",
+    company: "Company",
+    support: "Support",
+    sell: "Sell",
+    becomeCreator: "Become a creator",
+    becomeSupplier: "Become a supplier",
+    about: "About",
+    emp: "Export Monde Prestige Inc.",
+    contact: "Contact",
+    faq: "FAQ",
+    privacy: "Privacy",
+    terms: "Terms",
+    languages: "Languages",
+    rights: "© Export Monde Prestige Inc. All rights reserved.",
+  },
+  sticky: {
+    download: "Download the app",
+  },
+  appPage: {
+    title: "Download PagneMarket",
+    subtitle: "Coming soon on the App Store and Google Play.",
+    ios: "Open the App Store",
+    android: "Open Google Play",
+    desktop: "Choose your platform",
+    back: "Back to the site",
+  },
+};
+
+export const dictionaries: Record<Locale, Dictionary> = { fr, en };
+
+export function getDictionary(locale: Locale): Dictionary {
+  return dictionaries[locale];
+}

@@ -18,8 +18,11 @@ import { useAuth } from "@/src/auth";
 import { CityPicker } from "@/src/components/city-picker";
 import { CountryPicker } from "@/src/components/country-picker";
 import { DEFAULT_COUNTRY, formatPhone, type Country } from "@/src/countries";
+import { homeForRoles } from "@/src/home-route";
 import { colors } from "@/src/theme";
 import { Icon } from "@/src/icon";
+
+type RoleChoice = "buyer" | "supplier" | "tailor";
 
 const HERO =
   "https://images.unsplash.com/photo-1552710307-537199cd41c0?w=1600&q=80";
@@ -39,13 +42,14 @@ export default function AuthScreen() {
   const [code, setCode] = useState("");
   const [city, setCity] = useState("");
   const [shopName, setShopName] = useState("");
+  const [specialty, setSpecialty] = useState("");
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
-  const [role, setRole] = useState<"buyer" | "supplier">("buyer");
+  const [role, setRole] = useState<RoleChoice>("buyer");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const goHome = () => {
-    router.replace(role === "supplier" && mode === "register" ? "/supplier" : "/(tabs)");
+  const goHome = (roles?: string[]) => {
+    router.replace(homeForRoles(roles?.length ? roles : [role]));
   };
 
   const requireRegisterLocation = () => {
@@ -55,9 +59,13 @@ export default function AuthScreen() {
       return false;
     }
     if (!city.trim()) {
-      setErr(role === "supplier"
-        ? "Choisissez la ville de votre boutique pour être visible des clients"
-        : "Choisissez votre ville");
+      setErr(
+        role === "supplier"
+          ? "Choisissez la ville de votre boutique pour être visible des clients"
+          : role === "tailor"
+            ? "Choisissez la ville de votre atelier"
+            : "Choisissez votre ville"
+      );
       return false;
     }
     if (role === "supplier" && !shopName.trim()) {
@@ -89,7 +97,7 @@ export default function AuthScreen() {
     setErr(null);
     setLoading(true);
     try {
-      await verifyOtp({
+      const u = await verifyOtp({
         phone: formatPhone(phone.trim(), country),
         code: code.trim(),
         firstName: firstName.trim(),
@@ -99,8 +107,9 @@ export default function AuthScreen() {
         countryIso: country.iso,
         role,
         shopName: role === "supplier" && shopName.trim() ? shopName.trim() : undefined,
+        specialty: role === "tailor" && specialty.trim() ? specialty.trim() : undefined,
       });
-      goHome();
+      goHome(u.roles);
     } catch (e: any) {
       setErr(e.message || "Code incorrect");
     } finally {
@@ -117,13 +126,14 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       if (mode === "login") {
-        await signIn(email.trim(), password);
+        const u = await signIn(email.trim(), password);
+        goHome(u.roles);
       } else {
         if (!requireRegisterLocation()) {
           setLoading(false);
           return;
         }
-        await signUp({
+        const u = await signUp({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim(),
@@ -132,9 +142,10 @@ export default function AuthScreen() {
           country: country.name,
           role,
           shopName: role === "supplier" && shopName.trim() ? shopName.trim() : undefined,
+          specialty: role === "tailor" && specialty.trim() ? specialty.trim() : undefined,
         });
+        goHome(u.roles);
       }
-      goHome();
     } catch (e: any) {
       setErr(e.message || "Une erreur est survenue");
     } finally {
@@ -247,21 +258,31 @@ export default function AuthScreen() {
                 countryIso={country.iso}
                 value={city}
                 onChange={setCity}
-                placeholder={role === "supplier" ? "Ville de la boutique" : "Ville"}
+                placeholder={
+                  role === "supplier"
+                    ? "Ville de la boutique"
+                    : role === "tailor"
+                      ? "Ville de l'atelier"
+                      : "Ville"
+                }
                 testID="input-city"
               />
               <View style={styles.rolesRow}>
-                {(["buyer", "supplier"] as const).map((r) => (
+                {([
+                  { id: "buyer" as const, label: "Client" },
+                  { id: "supplier" as const, label: "Fournisseur" },
+                  { id: "tailor" as const, label: "Tailleur" },
+                ]).map((r) => (
                   <Pressable
-                    key={r}
-                    testID={`role-${r}`}
-                    onPress={() => setRole(r)}
-                    style={[styles.roleChip, role === r && styles.roleChipActive]}
+                    key={r.id}
+                    testID={`role-${r.id}`}
+                    onPress={() => setRole(r.id)}
+                    style={[styles.roleChip, role === r.id && styles.roleChipActive]}
                   >
                     <Text
-                      style={[styles.roleText, role === r && styles.roleTextActive]}
+                      style={[styles.roleText, role === r.id && styles.roleTextActive]}
                     >
-                      {r === "buyer" ? "Client" : "Fournisseur"}
+                      {r.label}
                     </Text>
                   </Pressable>
                 ))}
@@ -278,6 +299,21 @@ export default function AuthScreen() {
                   />
                   <Text style={styles.hint}>
                     Les clients de {city ? `${city}, ` : ""}{country.name} verront votre boutique en priorité.
+                  </Text>
+                </>
+              )}
+              {role === "tailor" && (
+                <>
+                  <TextInput
+                    testID="input-specialty"
+                    style={styles.input}
+                    placeholder="Spécialité (ex. robes, boubou, mariage)"
+                    placeholderTextColor={colors.muted}
+                    value={specialty}
+                    onChangeText={setSpecialty}
+                  />
+                  <Text style={styles.hint}>
+                    Les clients de {city ? `${city}, ` : ""}{country.name} pourront vous contacter pour faire coudre un tissu.
                   </Text>
                 </>
               )}
@@ -452,7 +488,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: colors.surfaceTertiary,
   },
-  rolesRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  rolesRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   roleChip: {
     flex: 1,
     paddingVertical: 10,

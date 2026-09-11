@@ -18,6 +18,17 @@ import { PhotoPicker } from "@/src/components/photo-picker";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
 
+const USAGE_OPTS = [
+  { id: "femme", label: "Femme" },
+  { id: "homme", label: "Homme" },
+  { id: "enfant", label: "Enfant" },
+  { id: "mariage", label: "Mariage" },
+  { id: "ceremonie", label: "Cérémonie" },
+  { id: "traditionnel", label: "Traditionnel" },
+  { id: "business", label: "Business" },
+  { id: "haute-couture", label: "Haute couture" },
+];
+
 export default function ProductForm() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -28,6 +39,7 @@ export default function ProductForm() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("wax");
+  const [usages, setUsages] = useState<string[]>([]);
   const [price, setPrice] = useState("");
   const [promoPrice, setPromoPrice] = useState("");
   const [stock, setStock] = useState("10");
@@ -51,7 +63,13 @@ export default function ProductForm() {
     setPromoPrice(p.promoPrice ? String(p.promoPrice) : "");
     setStock(String(p.stock ?? 0));
     setImages(p.images || []);
+    const tags: string[] = p.tags || [];
+    setUsages(USAGE_OPTS.map((u) => u.id).filter((id) => tags.includes(id)));
   }, [existing.data]);
+
+  const toggleUsage = (id: string) => {
+    setUsages((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const save = useMutation({
     mutationFn: () => {
@@ -63,7 +81,7 @@ export default function ProductForm() {
         promoPrice: promoPrice ? Number(promoPrice) : null,
         stock: Number(stock) || 0,
         images,
-        tags: [category],
+        tags: [category, ...usages],
       };
       return editing
         ? api(`/supplier/products/${id}`, { method: "PUT", body: JSON.stringify(body) })
@@ -109,7 +127,7 @@ export default function ProductForm() {
           />
         </Field>
 
-        <Field label="Catégorie">
+        <Field label="Catégorie (type de tissu)">
           <View style={styles.chips}>
             {((categories.data as any[]) || []).map((c) => (
               <Pressable
@@ -121,6 +139,24 @@ export default function ProductForm() {
                 <Text style={[styles.chipTxt, category === c.slug && styles.chipTxtActive]}>{c.name}</Text>
               </Pressable>
             ))}
+          </View>
+        </Field>
+
+        <Field label="Usage (optionnel)">
+          <View style={styles.chips}>
+            {USAGE_OPTS.map((u) => {
+              const active = usages.includes(u.id);
+              return (
+                <Pressable
+                  key={u.id}
+                  testID={`usage-${u.id}`}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => toggleUsage(u.id)}
+                >
+                  <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{u.label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
         </Field>
 

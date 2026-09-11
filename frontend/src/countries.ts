@@ -186,12 +186,18 @@ export const ALL_COUNTRIES: Country = { name: "Tous les pays", iso: "ALL", dial:
 
 export function countryByName(name?: string | null) {
   if (!name) return DEFAULT_COUNTRY;
-  return COUNTRIES.find((c) => c.name.toLowerCase() === name.toLowerCase()) || DEFAULT_COUNTRY;
+  const n = name.trim().toLowerCase();
+  if (n === "all" || n === "tous" || n === "tous les pays") return ALL_COUNTRIES;
+  return (
+    COUNTRIES.find((c) => c.name.toLowerCase() === n || c.iso.toLowerCase() === n) || DEFAULT_COUNTRY
+  );
 }
 
 export function countryByIso(iso?: string | null) {
   if (!iso) return DEFAULT_COUNTRY;
-  return COUNTRIES.find((c) => c.iso === iso.toUpperCase()) || DEFAULT_COUNTRY;
+  const n = iso.trim().toLowerCase();
+  if (n === "all") return ALL_COUNTRIES;
+  return COUNTRIES.find((c) => c.iso.toLowerCase() === n) || DEFAULT_COUNTRY;
 }
 
 export function formatPhone(raw: string, country: Country) {

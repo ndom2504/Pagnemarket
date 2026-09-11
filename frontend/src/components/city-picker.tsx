@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import {
   FlatList,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { citiesFor } from "@/src/cities";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
@@ -35,6 +37,7 @@ export function CityPicker({
   allLabel = "Toutes les villes",
   disabled,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const cities = useMemo(() => citiesFor(countryIso), [countryIso]);
@@ -46,6 +49,11 @@ export function CityPicker({
   }, [cities, q, allowAll, allLabel]);
 
   const label = !value ? placeholder : value === allLabel || value === "all" ? allLabel : value;
+
+  const close = () => {
+    setOpen(false);
+    setQ("");
+  };
 
   return (
     <>
@@ -62,9 +70,17 @@ export function CityPicker({
         </Text>
         <Icon name="chevron-down" size={16} color={colors.muted} />
       </Pressable>
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
+      <Modal
+        visible={open}
+        animationType="slide"
+        transparent
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={close}
+      >
+        <View style={styles.backdrop}>
+          <Pressable style={{ flex: 1 }} onPress={close} />
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             <Text style={styles.title}>Choisir une ville</Text>
             <TextInput
               testID="city-search"
@@ -73,12 +89,14 @@ export function CityPicker({
               placeholderTextColor={colors.muted}
               value={q}
               onChangeText={setQ}
-              autoFocus
+              autoFocus={Platform.OS !== "ios"}
             />
             <FlatList
               data={data}
               keyExtractor={(i) => i}
               keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              keyboardDismissMode="on-drag"
               style={{ maxHeight: 360 }}
               renderItem={({ item }) => (
                 <Pressable
@@ -86,16 +104,15 @@ export function CityPicker({
                   style={styles.row}
                   onPress={() => {
                     onChange(item === allLabel ? "all" : item);
-                    setOpen(false);
-                    setQ("");
+                    close();
                   }}
                 >
                   <Text style={styles.rowName}>{item}</Text>
                 </Pressable>
               )}
             />
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </>
   );
@@ -122,7 +139,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    paddingBottom: 28,
   },
   title: { fontSize: 18, fontWeight: "500", color: colors.onSurface, marginBottom: 12 },
   search: {
@@ -136,7 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceTertiary,
   },
   row: {
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },

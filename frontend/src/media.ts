@@ -21,6 +21,27 @@ function stripDataUrl(raw: string) {
   return s;
 }
 
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function fetchUriBase64(uri: string) {
+  if (typeof fetch !== "function") return "";
+  if (!/^(blob:|data:|https?:)/i.test(uri)) return "";
+  try {
+    const res = await fetch(uri);
+    if (!res.ok) return "";
+    return bytesToBase64(new Uint8Array(await res.arrayBuffer()));
+  } catch {
+    return "";
+  }
+}
+
 export async function imageToJpegBase64(uri: string, fallbackBase64?: string | null): Promise<string> {
   try {
     const info = await ImageManipulator.manipulateAsync(uri, [], { compress: 1 });
@@ -44,7 +65,7 @@ export async function imageToJpegBase64(uri: string, fallbackBase64?: string | n
   } catch {
     /* fallback below */
   }
-  const fallback = stripDataUrl(fallbackBase64 || "");
+  const fallback = stripDataUrl(fallbackBase64 || "") || (await fetchUriBase64(uri));
   if (fallback) return fallback;
   throw new Error("Impossible de lire la photo sur l'appareil.");
 }

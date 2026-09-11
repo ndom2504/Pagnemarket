@@ -31,15 +31,20 @@ export default function CreatorProfile() {
 
   const q = useQuery({ queryKey: ["creator", id], queryFn: () => api(`/creators/${id}`) });
   const send = useMutation({
-    mutationFn: (text: string) =>
-      api("/messages/send", {
+    mutationFn: (text: string) => {
+      const toUserId = q.data?.creator?.userId || id;
+      return api("/messages/send", {
         method: "POST",
-        body: JSON.stringify({ toUserId: id, toName: q.data?.creator?.name, text }),
-      }),
-    onSuccess: () => {
+        body: JSON.stringify({ toUserId, toName: q.data?.creator?.name, text }),
+      });
+    },
+    onSuccess: (msg: any) => {
       setSent(true);
       setMsg("");
       qc.invalidateQueries({ queryKey: ["conversations"] });
+      if (msg?.conversationId) {
+        router.push(`/conversation/${msg.conversationId}`);
+      }
       setTimeout(() => setSent(false), 3000);
     },
   });

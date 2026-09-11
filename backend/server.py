@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
 
-from deps import client, db, create_token, current_user, decrement_stock
+from deps import client, db, create_token, current_user, decrement_stock, ensure_creator_profile
 from routers import payments as payments_router
 from routers import supplier as supplier_router
 from routers import uploads as uploads_router
@@ -17,6 +17,8 @@ from routers import reco as reco_router
 from routers import reviews as reviews_router
 from routers import ai_looks as ai_looks_router
 from routers import otp_auth as otp_auth_router
+from routers import admin as admin_router
+from routers.admin import ensure_admin_user
 from routers.payments import OrderDraft, build_order_from_cart
 from storage import init_storage
 
@@ -40,6 +42,7 @@ class UserRegister(BaseModel):
     city: Optional[str] = None
     role: RoleT = "buyer"
     shopName: Optional[str] = None
+    specialty: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -57,6 +60,7 @@ class UserOut(BaseModel):
     avatar: Optional[str] = None
     avatarUrl: Optional[str] = None
     shopName: Optional[str] = None
+    specialty: Optional[str] = None
     createdAt: Optional[datetime] = None
 
 class AuthResponse(BaseModel):
@@ -140,8 +144,53 @@ class Message(BaseModel):
 
 class SendMessage(BaseModel):
     toUserId: str
-    toName: str
+    toName: Optional[str] = None
     text: str
+
+
+def _display_name(u: dict) -> str:
+    shop = (u.get("shopName") or "").strip()
+    if shop:
+        return shop
+    full = f"{u.get('firstName', '')} {u.get('lastName', '')}".strip()
+    return full or u.get("email") or "Utilisateur"
+
+
+async def resolve_message_peer(to_user_id: str) -> dict:
+    """Resolve a messaging peer to a real user (or creator-linked user)."""
+    peer = await db.users.find_one({"id": to_user_id}, {"_id": 0})
+    if peer:
+        return peer
+    creator = await db.creators.find_one(
+        {"$or": [{"id": to_user_id}, {"userId": to_user_id}]},
+        {"_id": 0},
+    )
+    if creator:
+        uid = creator.get("userId") or creator.get("id")
+        if uid:
+            peer = await db.users.find_one({"id": uid}, {"_id": 0})
+            if peer:
+                return peer
+        # Seed catalog creator without login — keep id so thread can exist
+        return {
+            "id": creator.get("userId") or creator["id"],
+            "firstName": creator.get("name") or "Tailleur",
+            "lastName": "",
+            "shopName": creator.get("name"),
+            "avatar": creator.get("avatar"),
+            "roles": ["tailor"],
+            "_virtual": True,
+        }
+    raise HTTPException(404, "Destinataire introuvable")
+
+
+def _participant_payload(u: dict) -> dict:
+    return {
+        "id": u["id"],
+        "name": _display_name(u),
+        "avatar": u.get("avatar") or u.get("avatarUrl"),
+        "roles": u.get("roles") or ["buyer"],
+    }
 
 # ------------------ HELPERS ------------------
 
@@ -173,6 +222,7 @@ def user_public(u: dict) -> dict:
         "avatar": u.get("avatar") or u.get("avatarUrl"),
         "avatarUrl": u.get("avatar") or u.get("avatarUrl"),
         "shopName": u.get("shopName"),
+        "specialty": u.get("specialty"),
         "createdAt": created,
     }
 
@@ -196,6 +246,7 @@ async def register(body: UserRegister):
         "roles": [body.role],
         "avatar": None,
         "shopName": body.shopName,
+        "specialty": body.specialty,
         "createdAt": datetime.now(timezone.utc),
     }
     if body.role == "supplier":
@@ -205,7 +256,14 @@ async def register(body: UserRegister):
             raise HTTPException(status_code=400, detail="Indiquez le pays de votre boutique")
         if not (body.shopName or "").strip():
             raise HTTPException(status_code=400, detail="Indiquez le nom de votre boutique")
+    if body.role == "tailor":
+        if not (body.city or "").strip():
+            raise HTTPException(status_code=400, detail="Indiquez la ville de votre atelier")
+        if not (body.country or "").strip():
+            raise HTTPException(status_code=400, detail="Indiquez le pays de votre atelier")
     await db.users.insert_one(user_doc)
+    if body.role == "tailor":
+        await ensure_creator_profile(user_doc)
     return {"token": create_token(uid), "user": user_public(user_doc)}
 
 @api_router.post("/auth/login", response_model=AuthResponse)
@@ -222,6 +280,7 @@ class UserUpdate(BaseModel):
     country: Optional[str] = None
     city: Optional[str] = None
     shopName: Optional[str] = None
+    specialty: Optional[str] = None
     avatar: Optional[str] = None
     avatarUrl: Optional[str] = None
     avatarBase64: Optional[str] = None
@@ -312,31 +371,81 @@ async def update_me(request: Request, body: UserUpdate, user: dict = Depends(cur
         patch["lastName"] = str(patch["lastName"]).strip()
     if "shopName" in patch:
         patch["shopName"] = str(patch["shopName"]).strip() or None
+    if "specialty" in patch:
+        patch["specialty"] = str(patch["specialty"]).strip() or None
     if "avatar" in patch and patch["avatar"] is not None:
         patch["avatar"] = str(patch["avatar"]).strip() or None
     if "supplier" in user.get("roles", []) and "city" in patch and not str(patch.get("city") or "").strip():
         raise HTTPException(400, "Indiquez la ville de votre boutique")
+    if "tailor" in user.get("roles", []) and "city" in patch and not str(patch.get("city") or "").strip():
+        raise HTTPException(400, "Indiquez la ville de votre atelier")
     patch["updatedAt"] = datetime.now(timezone.utc)
     await db.users.update_one({"id": user["id"]}, {"$set": patch})
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    if "tailor" in (updated or user).get("roles", []):
+        creator_patch = {}
+        if "firstName" in patch or "lastName" in patch:
+            creator_patch["name"] = f"{(updated or user).get('firstName', '')} {(updated or user).get('lastName', '')}".strip()
+        for src, dst in (("city", "city"), ("country", "country"), ("specialty", "specialty"), ("avatar", "avatar")):
+            if src in patch:
+                creator_patch[dst] = patch[src]
+        if creator_patch:
+            await db.creators.update_one(
+                {"$or": [{"userId": user["id"]}, {"id": user["id"]}]},
+                {"$set": creator_patch},
+            )
     return user_public(updated or {**user, **patch})
 
 # ------------------ CATALOG ROUTES ------------------
 
 DEFAULT_CATEGORIES = [
-    {"id": "wax", "slug": "wax", "name": "Pagne Wax", "image": None},
-    {"id": "bazin", "slug": "bazin", "name": "Bazin", "image": None},
-    {"id": "kente", "slug": "kente", "name": "Kente", "image": None},
-    {"id": "bogolan", "slug": "bogolan", "name": "Bogolan", "image": None},
-    {"id": "vlisco", "slug": "vlisco", "name": "Vlisco", "image": None},
-    {"id": "accessoires", "slug": "accessoires", "name": "Accessoires", "image": None},
+    # Wax & imprimés
+    {"id": "wax", "slug": "wax", "name": "Wax", "group": "wax", "image": "/images/categories/wax.png"},
+    {"id": "ankara", "slug": "ankara", "name": "Ankara", "group": "wax", "image": "/images/categories/ankara.png"},
+    {"id": "vlisco", "slug": "vlisco", "name": "Wax hollandais", "group": "wax", "image": "/images/categories/vlisco.png"},
+    # Tissus traditionnels
+    {"id": "kente", "slug": "kente", "name": "Kente", "group": "traditionnel", "image": "/images/categories/kente.png"},
+    {"id": "kita", "slug": "kita", "name": "Kita", "group": "traditionnel", "image": "/images/categories/kita.png"},
+    {"id": "bogolan", "slug": "bogolan", "name": "Bogolan", "group": "traditionnel", "image": "/images/categories/bogolan.png"},
+    {"id": "indigo", "slug": "indigo", "name": "Indigo", "group": "traditionnel", "image": "/images/categories/indigo.png"},
+    {"id": "aso-oke", "slug": "aso-oke", "name": "Aso Oke", "group": "traditionnel", "image": "/images/categories/aso-oke.png"},
+    {"id": "ndop", "slug": "ndop", "name": "Ndop", "group": "traditionnel", "image": "/images/categories/ndop.png"},
+    {"id": "shweshwe", "slug": "shweshwe", "name": "Shweshwe", "group": "traditionnel", "image": "/images/categories/shweshwe.png"},
+    {"id": "adire", "slug": "adire", "name": "Adire", "group": "traditionnel", "image": "/images/categories/adire.png"},
+    {"id": "raphia", "slug": "raphia", "name": "Raphia", "group": "traditionnel", "image": "/images/categories/raphia.png"},
+    # Cérémonie & luxe
+    {"id": "bazin", "slug": "bazin", "name": "Bazin", "group": "ceremonie", "image": "/images/categories/bazin.png"},
+    {"id": "dentelle", "slug": "dentelle", "name": "Dentelle", "group": "ceremonie", "image": "/images/categories/dentelle.png"},
+    # Gabon
+    {"id": "gabon", "slug": "gabon", "name": "Tissus du Gabon", "group": "pays", "image": "/images/categories/gabon.png"},
+    # Accessoires
+    {"id": "accessoires", "slug": "accessoires", "name": "Accessoires", "group": "accessoires", "image": "/images/categories/accessoires.png"},
 ]
 
 
 @api_router.get("/categories")
 async def get_categories():
-    cats = await db.categories.find({}, {"_id": 0}).to_list(100)
-    return cats or DEFAULT_CATEGORIES
+    cats = await db.categories.find({}, {"_id": 0}).to_list(200)
+    defaults = {c["slug"]: c for c in DEFAULT_CATEGORIES}
+    if not cats:
+        return DEFAULT_CATEGORIES
+    out = []
+    seen = set()
+    for c in cats:
+        slug = c.get("slug") or c.get("id")
+        seen.add(slug)
+        if slug in defaults:
+            # Prefer rich defaults (images, group) when DB has empty image
+            merged = {**defaults[slug], **{k: v for k, v in c.items() if v not in (None, "", [])}}
+            if not merged.get("image"):
+                merged["image"] = defaults[slug].get("image")
+            out.append(merged)
+        else:
+            out.append(c)
+    for slug, d in defaults.items():
+        if slug not in seen:
+            out.append(d)
+    return out
 
 def _country_clause(country: Optional[str]) -> Optional[dict]:
     if not country or country.lower() in ("all", "tous"):
@@ -380,6 +489,7 @@ async def list_products(
     sort: Optional[str] = None,
     country: Optional[str] = None,
     city: Optional[str] = None,
+    usage: Optional[str] = None,
 ):
     filters: list = []
     if category and category != "all":
@@ -392,6 +502,8 @@ async def list_products(
                 {"tags": {"$regex": q, "$options": "i"}},
             ]
         })
+    if usage and usage.lower() not in ("all", "tous"):
+        filters.append({"tags": {"$regex": usage, "$options": "i"}})
     country_q = _country_clause(country)
     if country_q:
         filters.append(country_q)
@@ -564,42 +676,80 @@ async def list_conversations(user: dict = Depends(current_user)):
     convs = await db.conversations.find({"participantIds": user["id"]}, {"_id": 0}).sort("updatedAt", -1).to_list(100)
     return convs
 
+@api_router.get("/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str, user: dict = Depends(current_user)):
+    conv = await db.conversations.find_one({"id": conversation_id}, {"_id": 0})
+    if not conv:
+        raise HTTPException(404, "Conversation introuvable")
+    is_admin = "admin" in (user.get("roles") or [])
+    if not is_admin and user["id"] not in (conv.get("participantIds") or []):
+        raise HTTPException(404, "Conversation introuvable")
+    return conv
+
 @api_router.post("/messages/send")
 async def send_message(body: SendMessage, user: dict = Depends(current_user)):
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(400, "Message vide")
+    if body.toUserId == user["id"]:
+        raise HTTPException(400, "Vous ne pouvez pas vous écrire à vous-même")
+
+    peer = await resolve_message_peer(body.toUserId)
+    peer_id = peer["id"]
+    me_p = _participant_payload(user)
+    peer_p = _participant_payload(peer)
+    if body.toName and body.toName.strip():
+        peer_p["name"] = body.toName.strip()
+
     conv = await db.conversations.find_one({
-        "participantIds": {"$all": [user["id"], body.toUserId]}
+        "participantIds": {"$all": [user["id"], peer_id]}
     })
     now = datetime.now(timezone.utc)
     if not conv:
         conv_id = str(uuid.uuid4())
         conv = {
             "id": conv_id,
-            "participantIds": [user["id"], body.toUserId],
-            "participants": [
-                {"id": user["id"], "name": f"{user.get('firstName','')} {user.get('lastName','')}".strip()},
-                {"id": body.toUserId, "name": body.toName},
-            ],
-            "lastMessage": body.text,
+            "participantIds": [user["id"], peer_id],
+            "participants": [me_p, peer_p],
+            "lastMessage": text,
             "updatedAt": now,
         }
         await db.conversations.insert_one(conv.copy())
     else:
         conv_id = conv["id"]
-        await db.conversations.update_one({"id": conv_id}, {"$set": {"lastMessage": body.text, "updatedAt": now}})
+        # Refresh participant metadata
+        await db.conversations.update_one(
+            {"id": conv_id},
+            {
+                "$set": {
+                    "lastMessage": text,
+                    "updatedAt": now,
+                    "participants": [me_p, peer_p],
+                    "participantIds": [user["id"], peer_id],
+                }
+            },
+        )
     msg = {
         "id": str(uuid.uuid4()),
         "conversationId": conv_id,
         "fromUserId": user["id"],
-        "fromName": f"{user.get('firstName','')} {user.get('lastName','')}".strip(),
-        "text": body.text,
+        "fromName": me_p["name"],
+        "text": text,
         "createdAt": now,
     }
     await db.messages.insert_one(msg.copy())
     msg.pop("_id", None)
+    msg["toUserId"] = peer_id
     return msg
 
 @api_router.get("/messages/{conversation_id}")
 async def get_messages(conversation_id: str, user: dict = Depends(current_user)):
+    conv = await db.conversations.find_one({"id": conversation_id}, {"_id": 0})
+    if not conv:
+        raise HTTPException(404, "Conversation introuvable")
+    is_admin = "admin" in (user.get("roles") or [])
+    if not is_admin and user["id"] not in (conv.get("participantIds") or []):
+        raise HTTPException(404, "Conversation introuvable")
     return await db.messages.find({"conversationId": conversation_id}, {"_id": 0}).sort("createdAt", 1).to_list(500)
 
 # ------------------ APP WIRING ------------------
@@ -615,6 +765,7 @@ api_router.include_router(reco_router.router)
 api_router.include_router(reviews_router.router)
 api_router.include_router(ai_looks_router.router)
 api_router.include_router(otp_auth_router.router)
+api_router.include_router(admin_router.router)
 app.include_router(api_router)
 # Vercel serves this function at /api and sometimes strips that prefix.
 app.include_router(uploads_router.router)
@@ -641,6 +792,10 @@ app.add_middleware(
 async def on_startup():
     if hasattr(db, "ready"):
         await db.ready()
+    try:
+        await ensure_admin_user()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Admin seed failed: %s", e)
     try:
         await run_in_threadpool(init_storage)
         logger.info("Object storage ready")

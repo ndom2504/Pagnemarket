@@ -12,7 +12,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
-load_dotenv(ROOT_DIR.parent / "frontend" / ".env", override=False)
+# Frontend .env carries shared secrets for local/dev (ADMIN_*, DATABASE_URL, …)
+load_dotenv(ROOT_DIR.parent / "frontend" / ".env", override=True)
 
 database_url = (os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or "").strip()
 mongo_url = os.environ.get("MONGO_URL", "mock://local")
@@ -65,6 +66,63 @@ async def current_supplier(user: dict = Depends(current_user)) -> dict:
     if "supplier" not in user.get("roles", []) and "admin" not in user.get("roles", []):
         raise HTTPException(status_code=403, detail="Accès réservé aux fournisseurs")
     return user
+
+
+async def current_tailor(user: dict = Depends(current_user)) -> dict:
+    if "tailor" not in user.get("roles", []) and "admin" not in user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Accès réservé aux tailleurs")
+    return user
+
+
+async def current_admin(user: dict = Depends(current_user)) -> dict:
+    if "admin" not in user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Accès réservé à l'administration")
+    return user
+
+
+def user_public_safe(u: dict) -> dict:
+    return {
+        "id": u.get("id"),
+        "firstName": u.get("firstName") or "",
+        "lastName": u.get("lastName") or "",
+        "email": u.get("email") or "",
+        "phone": u.get("phone"),
+        "country": u.get("country"),
+        "city": u.get("city"),
+        "roles": u.get("roles") or ["buyer"],
+        "avatar": u.get("avatar") or u.get("avatarUrl"),
+        "avatarUrl": u.get("avatar") or u.get("avatarUrl"),
+        "shopName": u.get("shopName"),
+        "specialty": u.get("specialty"),
+        "createdAt": u.get("createdAt"),
+    }
+
+
+async def ensure_creator_profile(user: dict) -> dict:
+    existing = await db.creators.find_one(
+        {"$or": [{"userId": user["id"]}, {"id": user["id"]}]},
+        {"_id": 0},
+    )
+    if existing:
+        return existing
+    name = f"{user.get('firstName', '')} {user.get('lastName', '')}".strip() or user.get("shopName") or "Tailleur"
+    doc = {
+        "id": user["id"],
+        "userId": user["id"],
+        "name": name,
+        "city": user.get("city") or "",
+        "country": user.get("country") or "",
+        "specialty": user.get("specialty") or user.get("shopName") or "Couture sur mesure",
+        "yearsExperience": int(user.get("yearsExperience") or 0),
+        "rating": 5.0,
+        "modelsCount": 0,
+        "ordersCount": 0,
+        "bio": user.get("bio") or "",
+        "avatar": user.get("avatar"),
+        "cover": None,
+    }
+    await db.creators.insert_one(doc)
+    return doc
 
 
 def public_base_url(request) -> str:

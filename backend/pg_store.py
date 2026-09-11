@@ -82,6 +82,12 @@ def matches(doc: dict, query: Optional[dict]) -> bool:
                 return False
             if "$nin" in expected and actual in expected["$nin"]:
                 return False
+            if "$all" in expected:
+                if not isinstance(actual, list):
+                    return False
+                for item in expected["$all"]:
+                    if item not in actual:
+                        return False
             if "$lt" in expected:
                 if actual is None or actual >= expected["$lt"]:
                     return False

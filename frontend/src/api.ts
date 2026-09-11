@@ -83,6 +83,9 @@ export function friendlyUploadError(raw: string, status?: number) {
     return "Photo trop lourde. Choisissez une image plus légère.";
   }
   if (status === 402) return "Stockage temporairement indisponible. Réessayez plus tard.";
+  if (status === 404 || lower === "not found") {
+    return "Le serveur d'images n'est pas à jour. Relancez l'application.";
+  }
   if (status === 422 || lower.includes("field required")) {
     return "La photo n'a pas pu être envoyée. Réessayez.";
   }

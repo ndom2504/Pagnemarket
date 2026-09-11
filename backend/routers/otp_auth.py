@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from countries import dial_for_iso
-from deps import create_token, db
+from deps import create_token, db, ensure_creator_profile
 
 
 def user_public(u: dict) -> dict:
@@ -27,13 +27,14 @@ def user_public(u: dict) -> dict:
         "roles": u.get("roles", ["buyer"]),
         "avatar": u.get("avatar"),
         "shopName": u.get("shopName"),
+        "specialty": u.get("specialty"),
         "createdAt": u.get("createdAt", datetime.now(timezone.utc)),
     }
 
 logger = logging.getLogger("pagnemarket.otp")
 router = APIRouter()
 
-RoleT = Literal["buyer", "supplier"]
+RoleT = Literal["buyer", "supplier", "tailor"]
 
 
 class OtpSendIn(BaseModel):
@@ -51,6 +52,7 @@ class OtpVerifyIn(BaseModel):
     countryIso: Optional[str] = None
     role: RoleT = "buyer"
     shopName: Optional[str] = None
+    specialty: Optional[str] = None
 
 
 def normalize_phone(raw: str, country_iso: Optional[str] = None) -> str:
@@ -122,6 +124,11 @@ async def otp_verify(body: OtpVerifyIn):
                 raise HTTPException(400, "Indiquez le pays de votre boutique")
             if not (body.shopName or "").strip():
                 raise HTTPException(400, "Indiquez le nom de votre boutique")
+        if body.role == "tailor":
+            if not (body.city or "").strip():
+                raise HTTPException(400, "Indiquez la ville de votre atelier")
+            if not (body.country or "").strip():
+                raise HTTPException(400, "Indiquez le pays de votre atelier")
         uid = str(uuid.uuid4())
         dummy = bcrypt.hashpw(uuid.uuid4().hex.encode(), bcrypt.gensalt()).decode()
         user = {
@@ -136,10 +143,13 @@ async def otp_verify(body: OtpVerifyIn):
             "roles": [body.role],
             "avatar": None,
             "shopName": body.shopName,
+            "specialty": body.specialty,
             "createdAt": datetime.now(timezone.utc),
             "phoneVerified": True,
         }
         await db.users.insert_one(user)
+        if body.role == "tailor":
+            await ensure_creator_profile(user)
     else:
         await db.users.update_one({"id": user["id"]}, {"$set": {"phoneVerified": True, "phone": phone}})
         user["phone"] = phone

@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Haptics from "expo-haptics";
 import {
   ActivityIndicator,
@@ -12,8 +12,10 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 const GARMENTS = ["Robe", "Boubou", "Ensemble", "Chemise", "Pantalon", "Mariage"] as const;
@@ -42,11 +44,13 @@ type Props = {
 };
 
 export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCart }: Props) {
+  const insets = useSafeAreaInsets();
   const [garment, setGarment] = useState<(typeof GARMENTS)[number]>("Robe");
   const [look, setLook] = useState<Look | null>(null);
-  const [showResult, setShowResult] = useState(false);
+  const [open, setOpen] = useState(false);
   const [imgReady, setImgReady] = useState(false);
   const [ritual, setRitual] = useState(0);
+  const ignore = useRef(false);
 
   const generate = useMutation({
     mutationFn: () =>
@@ -55,16 +59,37 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
         body: JSON.stringify({ productId, garment }),
       }),
     onMutate: () => {
+      ignore.current = false;
       setImgReady(false);
-      setShowResult(true);
+      setLook(null);
+      setOpen(true);
     },
     onSuccess: (data) => {
+      if (ignore.current) return;
       setLook(data);
     },
-    onError: () => setShowResult(false),
+    onError: () => {
+      if (ignore.current) return;
+      setOpen(false);
+    },
   });
 
-  const revealing = generate.isPending || (showResult && !!look && !imgReady);
+  const pending = generate.isPending;
+  const revealing = open && (pending || (!!look && !imgReady));
+
+  const close = () => {
+    ignore.current = true;
+    setOpen(false);
+    generate.reset();
+  };
+
+  const reject = () => {
+    ignore.current = true;
+    setLook(null);
+    setImgReady(false);
+    setOpen(false);
+    generate.reset();
+  };
 
   useEffect(() => {
     if (!revealing) {
@@ -77,7 +102,7 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
 
   useEffect(() => {
     if (!look || imgReady) return;
-    const t = setTimeout(() => setImgReady(true), 45000);
+    const t = setTimeout(() => setImgReady(true), 12000);
     return () => clearTimeout(t);
   }, [look, imgReady]);
 
@@ -115,9 +140,9 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
         testID="generate-look"
         style={styles.cta}
         onPress={() => generate.mutate()}
-        disabled={generate.isPending}
+        disabled={pending}
       >
-        {generate.isPending ? (
+        {pending ? (
           <ActivityIndicator color={colors.onBrandPrimary} />
         ) : (
           <>
@@ -133,9 +158,9 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
         </Text>
       )}
 
-      {look && imgReady && !showResult && (
-        <Pressable testID="look-preview" style={styles.preview} onPress={() => setShowResult(true)}>
-          <Image source={{ uri: look.image }} style={styles.previewImg} contentFit="cover" />
+      {look && imgReady && !open && (
+        <Pressable testID="look-preview" style={styles.preview} onPress={() => setOpen(true)}>
+          <Image source={{ uri: mediaUrl(look.image) }} style={styles.previewImg} contentFit="cover" />
           <LinearGradient colors={["transparent", "rgba(17,17,17,0.85)"]} style={StyleSheet.absoluteFill} />
           <View style={styles.previewCap}>
             <Text style={styles.previewTitle}>{look.title}</Text>
@@ -151,11 +176,11 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
         <Text style={styles.ghostTxt}>Faire coudre par un tailleur</Text>
       </Pressable>
 
-      <Modal visible={generate.isPending || showResult} transparent animationType="fade" onRequestClose={() => setShowResult(false)}>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={pending ? close : reject}>
         <View style={styles.resultWrap}>
           {look ? (
             <Image
-              source={{ uri: look.image }}
+              source={{ uri: mediaUrl(look.image) }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
               onLoad={() => {
@@ -164,14 +189,19 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 }
               }}
+              onError={() => setImgReady(true)}
             />
           ) : null}
           {revealing ? (
             <View style={[styles.ritual, look ? styles.ritualOver : null]} testID="look-ritual">
               <ActivityIndicator color={colors.brandTertiary} size="large" />
-              <Text style={styles.ritualTitle}>Atelier IA</Text>
+              <Text style={styles.ritualTitle}>Atelier IA · FASHN</Text>
               <Text style={styles.ritualLine}>{RITUAL[ritual]}</Text>
               <Text style={styles.ritualSub}>{productName} · {garment}</Text>
+              <Text style={styles.ritualHint}>Environ 10 à 25 secondes</Text>
+              <Pressable testID="look-cancel" onPress={close} style={styles.cancelBtn}>
+                <Text style={styles.cancelTxt}>Annuler</Text>
+              </Pressable>
             </View>
           ) : look ? (
             <>
@@ -179,7 +209,7 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
                 colors={["rgba(17,17,17,0.15)", "rgba(17,17,17,0.88)"]}
                 style={StyleSheet.absoluteFill}
               />
-              <View style={styles.resultInner} testID="look-result">
+              <View style={[styles.resultInner, { paddingBottom: Math.max(insets.bottom, 28) }]} testID="look-result">
                 <Text style={styles.resultKicker}>Votre modèle</Text>
                 <Text style={styles.resultTitle}>{look.title}</Text>
                 <Text style={styles.resultStory}>{look.story}</Text>
@@ -188,7 +218,7 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
                     testID="look-add-cart"
                     style={styles.resultPrimary}
                     onPress={() => {
-                      setShowResult(false);
+                      setOpen(false);
                       onAddToCart();
                     }}
                   >
@@ -199,16 +229,21 @@ export function AiLookStudio({ productId, productName, onOpenTailors, onAddToCar
                     style={styles.resultGhost}
                     onPress={() => {
                       const g = look.garment;
-                      setShowResult(false);
+                      setOpen(false);
                       onOpenTailors(g);
                     }}
                   >
                     <Text style={styles.resultGhostTxt}>Le faire coudre</Text>
                   </Pressable>
                 </View>
-                <Pressable testID="look-close" onPress={() => setShowResult(false)} style={styles.close}>
-                  <Text style={styles.closeTxt}>Garder ce rêve et continuer</Text>
-                </Pressable>
+                <View style={styles.rejectRow}>
+                  <Pressable testID="look-reject" onPress={reject} style={styles.rejectBtn}>
+                    <Text style={styles.rejectTxt}>Rejeter ce modèle</Text>
+                  </Pressable>
+                  <Pressable testID="look-retry" onPress={() => generate.mutate()} style={styles.rejectBtn}>
+                    <Text style={styles.retryTxt}>Générer un autre</Text>
+                  </Pressable>
+                </View>
               </View>
             </>
           ) : null}
@@ -291,8 +326,11 @@ const styles = StyleSheet.create({
   ritualTitle: { color: colors.brandTertiary, fontSize: 13, letterSpacing: 2, fontWeight: "500" },
   ritualLine: { color: colors.onSurfaceInverse, fontSize: 22, fontWeight: "500", textAlign: "center" },
   ritualSub: { color: colors.onSurfaceInverse, opacity: 0.6, fontSize: 13 },
+  ritualHint: { color: colors.onSurfaceInverse, opacity: 0.45, fontSize: 12, marginTop: 4 },
+  cancelBtn: { marginTop: 16, paddingVertical: 12, paddingHorizontal: 24 },
+  cancelTxt: { color: colors.onSurfaceInverse, opacity: 0.8, fontSize: 14, fontWeight: "500" },
   resultWrap: { flex: 1, backgroundColor: "#111111", justifyContent: "flex-end" },
-  resultInner: { padding: 24, paddingBottom: 40, gap: 10 },
+  resultInner: { padding: 24, gap: 10 },
   resultKicker: { color: colors.brandTertiary, fontSize: 12, letterSpacing: 1.4, fontWeight: "500" },
   resultTitle: { color: colors.onSurfaceInverse, fontSize: 24, fontWeight: "500", letterSpacing: -0.5 },
   resultStory: { color: colors.onSurfaceInverse, opacity: 0.88, fontSize: 14, lineHeight: 22 },
@@ -314,6 +352,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   resultGhostTxt: { color: colors.onSurfaceInverse, fontWeight: "500", fontSize: 14 },
-  close: { alignItems: "center", paddingTop: 8 },
-  closeTxt: { color: colors.onSurfaceInverse, opacity: 0.7, fontSize: 12 },
+  rejectRow: { flexDirection: "row", justifyContent: "center", gap: 16, paddingTop: 6 },
+  rejectBtn: { paddingVertical: 8, paddingHorizontal: 8 },
+  rejectTxt: { color: colors.onSurfaceInverse, opacity: 0.7, fontSize: 13 },
+  retryTxt: { color: colors.brandTertiary, fontSize: 13, fontWeight: "500" },
 });

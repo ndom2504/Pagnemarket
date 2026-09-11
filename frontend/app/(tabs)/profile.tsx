@@ -25,6 +25,7 @@ export default function Profile() {
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api("/orders"), enabled: !!user });
   const favs = useQuery({ queryKey: ["favorites"], queryFn: () => api("/favorites"), enabled: !!user });
   const isSupplier = !!user?.roles?.includes("supplier");
+  const isTailor = !!user?.roles?.includes("tailor");
 
   const handleSignOut = async () => {
     await signOut();
@@ -103,6 +104,19 @@ export default function Profile() {
           <View style={{ flex: 1 }}>
             <Text style={styles.supplierTitle}>Espace fournisseur</Text>
             <Text style={styles.supplierSub}>Ventes du jour, commandes en cours, vos tissus</Text>
+          </View>
+          <Icon name="chevron-right" size={18} color={colors.onSurfaceInverse} />
+        </Pressable>
+      )}
+
+      {isTailor && (
+        <Pressable testID="tailor-space" style={styles.supplierCard} onPress={() => router.push("/tailor")}>
+          <View style={styles.supplierIcon}>
+            <Icon name="scissors" size={20} color={colors.onBrandSecondary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.supplierTitle}>Atelier tailleur</Text>
+            <Text style={styles.supplierSub}>Messages clients et demandes de couture</Text>
           </View>
           <Icon name="chevron-right" size={18} color={colors.onSurfaceInverse} />
         </Pressable>
