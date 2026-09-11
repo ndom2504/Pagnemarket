@@ -57,9 +57,10 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
   const launch = async (source: Source) => {
     const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: ["images"],
-      quality: 1,
+      quality: 0.7,
       allowsEditing: true,
       aspect: [1, 1],
+      base64: true,
     };
     const result =
       source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
@@ -72,7 +73,7 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
       setOk(true);
       onChange(up.avatar || up.url);
     } catch (e: any) {
-      setError(e.message || "Impossible d'envoyer la photo.");
+      setError(e.message || "Échec de l'envoi de l'image.");
     } finally {
       setUploading(false);
     }

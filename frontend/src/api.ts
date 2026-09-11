@@ -1,11 +1,5 @@
 import { storage } from "@/src/utils/storage";
-import {
-  API_BASE_URL,
-  prepareImageUpload,
-  readImageBase64,
-  uploadPreparedFile,
-  type PreparedImage,
-} from "@/src/media";
+import { API_BASE_URL, prepareImageUpload, readImageBase64 } from "@/src/media";
 
 const KEY = "pm_token";
 let cachedToken: string | null = null;
@@ -51,10 +45,7 @@ export async function api<T = any>(
 
 function formatApiError(data: any, status: number) {
   const raw = data && (data.detail ?? data.message);
-  if (typeof raw === "string") {
-    if (raw.toLowerCase() === "not found") return `Cette action est introuvable sur le serveur (${status || 404}).`;
-    return raw;
-  }
+  if (typeof raw === "string") return raw;
   if (Array.isArray(raw) && raw[0]) {
     const first = raw[0];
     const loc = Array.isArray(first?.loc)
@@ -72,7 +63,7 @@ export function friendlyUploadError(raw: string, status?: number) {
   if (status === 401 || lower.includes("not authenticated") || lower.includes("invalid token")) {
     return "Reconnectez-vous pour envoyer une photo.";
   }
-  if (status === 413 || lower.includes("trop lourd") || lower.includes("too large")) {
+  if (status === 413 || lower.includes("trop lourd") || lower.includes("too large") || lower.includes("payload")) {
     return "Photo trop lourde. Choisissez une image plus légère.";
   }
   if (status === 402) return "Stockage temporairement indisponible. Réessayez plus tard.";
@@ -86,58 +77,36 @@ export function friendlyUploadError(raw: string, status?: number) {
     return "Pas de connexion. Réessayez.";
   }
   if (msg) return msg;
-  return status ? `Impossible d'envoyer la photo (erreur ${status}).` : "Impossible d'envoyer la photo.";
+  return "Échec de l'envoi de l'image. Réessayez.";
 }
 
 export function formatXAF(n: number): string {
   return `${Math.round(n).toLocaleString("fr-FR")} FCFA`;
 }
 
-function parseUploadBody(body: string, status: number) {
-  let data: any = null;
-  try {
-    data = body ? JSON.parse(body) : null;
-  } catch {
-    data = null;
-  }
-  if (status < 200 || status >= 300) {
-    throw new Error(friendlyUploadError(formatApiError(data, status), status));
-  }
-  if (!data?.url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");
-  return data as { id?: string; url: string; avatar?: string };
-}
-
-export async function uploadImage(asset: { uri: string }, opts: { asAvatar?: boolean } = {}) {
+export async function uploadImage(
+  asset: { uri: string; base64?: string | null },
+  opts: { asAvatar?: boolean } = {}
+) {
   const token = await loadToken();
   if (!token) throw new Error("Reconnectez-vous pour envoyer une photo.");
 
-  const prepared = await prepareImageUpload(asset.uri);
+  const prepared = await prepareImageUpload(asset.uri, asset.base64);
+  const data = await readImageBase64(prepared.uri, prepared.base64 || asset.base64);
   try {
-    return await uploadImageJson(prepared, opts);
+    const saved = await api<{ id?: string; url: string; avatar?: string }>("/uploads/image", {
+      method: "POST",
+      body: JSON.stringify({
+        data,
+        image: data,
+        contentType: prepared.mimeType,
+        fileName: prepared.fileName,
+        asAvatar: !!opts.asAvatar,
+      }),
+    });
+    if (!saved?.url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");
+    return saved;
   } catch (e: any) {
-    const msg = String(e?.message || "");
-    if (msg.startsWith("Reconnectez") || msg.startsWith("Photo trop") || msg.startsWith("Stockage")) {
-      throw e;
-    }
-    try {
-      const sent = await uploadPreparedFile(prepared, token, "/api/uploads/image");
-      return parseUploadBody(sent.body, sent.status);
-    } catch (e2: any) {
-      throw new Error(friendlyUploadError(e2?.message || msg));
-    }
+    throw new Error(friendlyUploadError(e?.message || "Échec de l'envoi de l'image"));
   }
-}
-
-async function uploadImageJson(prepared: PreparedImage, opts: { asAvatar?: boolean }) {
-  const data = await readImageBase64(prepared.uri);
-  return api<{ id?: string; url: string; avatar?: string }>("/uploads/image", {
-    method: "POST",
-    body: JSON.stringify({
-      data,
-      image: data,
-      contentType: prepared.mimeType,
-      fileName: prepared.fileName,
-      asAvatar: !!opts.asAvatar,
-    }),
-  });
 }
