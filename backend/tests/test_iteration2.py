@@ -1,4 +1,5 @@
 """PagneMarket iteration 2 — Supplier, Mobile Money, Uploads, Reco."""
+import base64
 import io
 import time
 import uuid
@@ -194,6 +195,31 @@ class TestUploads:
                           files={"file": ("avatar.jpg", buf, "image/jpeg")})
         assert r.status_code == 200, r.text
         assert "url" in r.json()
+
+    def test_upload_requires_auth(self, api, base_url):
+        r = requests.post(f"{base_url}/api/uploads/image",
+                          files={"file": ("a.jpg", b"xxxx", "image/jpeg")})
+        assert r.status_code == 401
+
+    def test_upload_json_png_as_avatar(self, api, base_url, buyer_auth):
+        img = Image.new("RGB", (16, 16), color=(1, 2, 3))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        headers = {"Authorization": f"Bearer {buyer_auth['token']}"}
+        r = requests.post(
+            f"{base_url}/api/uploads/image",
+            headers=headers,
+            json={
+                "data": base64.b64encode(buf.getvalue()).decode(),
+                "contentType": "image/png",
+                "fileName": "avatar.png",
+                "asAvatar": True,
+            },
+        )
+        assert r.status_code == 200, r.text
+        url = r.json()["url"]
+        assert url.startswith("http")
+        assert "localhost" not in url and "127.0.0.1" not in url
 
     def test_upload_reject_non_image(self, api, base_url, buyer_auth):
         headers = {"Authorization": f"Bearer {buyer_auth['token']}"}

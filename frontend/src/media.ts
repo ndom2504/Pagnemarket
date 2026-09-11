@@ -1,17 +1,29 @@
-import { File, UploadType } from "expo-file-system";
-import { getInfoAsync } from "expo-file-system/legacy";
+import {
+  EncodingType,
+  FileSystemSessionType,
+  FileSystemUploadType,
+  getInfoAsync,
+  readAsStringAsync,
+  uploadAsync,
+} from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Platform } from "react-native";
-import { storage } from "@/src/utils/storage";
 
-const BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://pagnemarket.vercel.app").replace(/\/$/, "");
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://pagnemarket.vercel.app")
+  .replace(/\/$/, "")
+  .replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "https://pagnemarket.vercel.app");
+
 const MAX_BYTES = 1.8 * 1024 * 1024;
 
 export function mediaUrl(url?: string | null) {
   if (!url) return "";
-  if (/^(https?:|file:|data:|content:)/i.test(url)) return url;
+  if (/^(file:|data:|content:|ph:|assets-library:)/i.test(url)) return url;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(url)) {
+    return url.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, API_BASE_URL);
+  }
+  if (/^https?:\/\//i.test(url)) return url;
   const path = url.startsWith("/") ? url : `/${url}`;
-  return `${BASE_URL}${path.startsWith("/api") ? path : `/api${path}`}`;
+  return `${API_BASE_URL}${path.startsWith("/api") ? path : `/api${path}`}`;
 }
 
 export type PreparedImage = { uri: string; fileName: string; mimeType: "image/jpeg" };
@@ -47,40 +59,36 @@ async function fileSize(uri: string) {
   }
 }
 
-export async function uploadFile(prepared: PreparedImage): Promise<{ url: string; id?: string }> {
-  const token = await storage.secureGet<string>("pm_token", "");
-  const url = `${BASE_URL}/api/upload`;
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+export async function readImageBase64(uri: string) {
+  const data = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+  if (!data?.trim()) throw new Error("Impossible de lire la photo sur l'appareil");
+  return data.trim();
+}
+
+export async function uploadPreparedFile(
+  prepared: PreparedImage,
+  token: string,
+  path = "/api/uploads/image"
+) {
+  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
 
   if (Platform.OS === "web") {
     const blob = await (await fetch(prepared.uri)).blob();
     const form = new FormData();
     form.append("file", blob, prepared.fileName);
     const res = await fetch(url, { method: "POST", headers, body: form });
-    const data = JSON.parse(await res.text());
-    if (!res.ok) throw new Error(data?.detail || `Erreur ${res.status}`);
-    return data;
+    return { status: res.status, body: await res.text() };
   }
 
-  const result = await new File(prepared.uri).upload(url, {
+  const result = await uploadAsync(url, prepared.uri, {
     httpMethod: "POST",
-    uploadType: UploadType.MULTIPART,
+    uploadType: FileSystemUploadType.MULTIPART,
     fieldName: "file",
     mimeType: prepared.mimeType,
-    parameters: { filename: prepared.fileName },
+    sessionType: FileSystemSessionType.FOREGROUND,
     headers,
+    parameters: { fileName: prepared.fileName },
   });
-  let data: any = null;
-  try {
-    data = result.body ? JSON.parse(result.body) : null;
-  } catch {
-    data = null;
-  }
-  if (result.status < 200 || result.status >= 300) {
-    const detail = typeof data?.detail === "string" ? data.detail : data?.message;
-    throw new Error(detail || `Erreur ${result.status}`);
-  }
-  if (!data?.url) throw new Error("URL de photo manquante");
-  return data;
+  return { status: result.status, body: result.body || "" };
 }

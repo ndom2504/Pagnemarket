@@ -11,8 +11,9 @@ import {
   Text,
   View,
 } from "react-native";
+import { uploadImage } from "@/src/api";
 import { Icon } from "@/src/icon";
-import { mediaUrl, prepareImageUpload, uploadFile } from "@/src/media";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 type Source = "camera" | "gallery";
@@ -28,6 +29,7 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
   const [blocked, setBlocked] = useState<Source | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
 
   const getPermission = (source: Source) =>
     source === "camera" ? ImagePicker.getCameraPermissionsAsync() : ImagePicker.getMediaLibraryPermissionsAsync();
@@ -36,6 +38,7 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
 
   const start = async (source: Source) => {
     setError(null);
+    setOk(false);
     if (Platform.OS === "web") return launch(source);
     const current = await getPermission(source);
     if (current.granted) return launch(source);
@@ -55,18 +58,21 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
     const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: ["images"],
       quality: 1,
-      allowsEditing: false,
+      allowsEditing: true,
+      aspect: [1, 1],
     };
     const result =
       source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
     if (result.canceled || !result.assets[0]?.uri) return;
     setUploading(true);
+    setError(null);
+    setOk(false);
     try {
-      const prepared = await prepareImageUpload(result.assets[0].uri);
-      const up = await uploadFile(prepared);
-      onChange(up.url);
+      const up = await uploadImage(result.assets[0], { asAvatar: true });
+      setOk(true);
+      onChange(up.avatar || up.url);
     } catch (e: any) {
-      setError(e.message || "Échec de l'envoi");
+      setError(e.message || "Impossible d'envoyer la photo.");
     } finally {
       setUploading(false);
     }
@@ -90,13 +96,22 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
           )}
         </View>
       </Pressable>
-      <Text style={styles.hint}>Appuyez pour choisir dans la galerie</Text>
+      <Text style={[styles.hint, ok && !uploading ? styles.hintOk : null]}>
+        {uploading ? "Envoi de la photo…" : ok ? "Photo enregistrée" : "Appuyez pour choisir et recadrer"}
+      </Text>
       <View style={styles.actions}>
         <Pressable testID="avatar-camera" onPress={() => start("camera")} disabled={uploading}>
           <Text style={styles.actionTxt}>Appareil photo</Text>
         </Pressable>
         {uri ? (
-          <Pressable testID="avatar-remove" onPress={() => onChange(null)} disabled={uploading}>
+          <Pressable
+            testID="avatar-remove"
+            onPress={() => {
+              setOk(false);
+              onChange(null);
+            }}
+            disabled={uploading}
+          >
             <Text style={styles.actionTxt}>Supprimer</Text>
           </Pressable>
         ) : null}
@@ -182,7 +197,8 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.surface,
   },
-  hint: { color: colors.muted, fontSize: 12, marginTop: 10 },
+  hint: { color: colors.muted, fontSize: 12, marginTop: 10, textAlign: "center" },
+  hintOk: { color: colors.brandSecondary },
   actions: { flexDirection: "row", gap: 16, marginTop: 8 },
   actionTxt: { color: colors.brandPrimary, fontSize: 13, fontWeight: "500" },
   err: { color: colors.error, fontSize: 12, marginTop: 6, textAlign: "center" },

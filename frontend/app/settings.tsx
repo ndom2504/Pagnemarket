@@ -93,8 +93,13 @@ export default function SettingsScreen() {
             setErr(null);
             setOk(false);
             try {
-              await updateProfile({ avatarUrl: url, avatar: url });
-              setAvatar(url || "");
+              if (url) {
+                setAvatar(url);
+                await updateProfile({ avatarUrl: url, avatar: url });
+              } else {
+                await updateProfile({ avatarUrl: null, avatar: null });
+                setAvatar("");
+              }
               await refresh();
               setOk(true);
             } catch (e: any) {

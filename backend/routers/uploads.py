@@ -107,9 +107,28 @@ async def _from_json(request: Request, user: dict, payload: dict):
 save_json_image = _from_json
 
 
+async def _maybe_avatar(user: dict, saved: dict, as_avatar: bool):
+    if as_avatar:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"avatar": saved["url"]}})
+        saved["avatar"] = saved["url"]
+    return saved
+
+
+def _wants_avatar(request: Request, extra: Optional[dict] = None) -> bool:
+    flag = request.query_params.get("asAvatar") or request.query_params.get("as_avatar")
+    if str(flag).lower() in {"1", "true", "yes"}:
+        return True
+    return bool(extra and extra.get("asAvatar"))
+
+
 @router.post("/upload")
-async def upload(request: Request, file: UploadFile = File(...), user: dict = Depends(current_user)):
-    return await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
+async def upload(
+    request: Request,
+    file: UploadFile = File(...),
+    user: dict = Depends(current_user),
+):
+    saved = await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
+    return await _maybe_avatar(user, saved, _wants_avatar(request))
 
 
 @router.post("/uploads/image")
@@ -118,10 +137,11 @@ async def upload_image(request: Request, user: dict = Depends(current_user)):
     if "application/json" in ctype:
         return await _from_json(request, user, await request.json())
     form = await request.form()
-    file = form.get("file")
+    file = form.get("file") or form.get("image") or form.get("photo")
     if not isinstance(file, UploadFile):
         raise HTTPException(400, "Fichier image manquant")
-    return await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
+    saved = await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
+    return await _maybe_avatar(user, saved, _wants_avatar(request))
 
 
 @router.post("/uploads/image-json")

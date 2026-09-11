@@ -68,9 +68,18 @@ async def current_supplier(user: dict = Depends(current_user)) -> dict:
 
 
 def public_base_url(request) -> str:
-    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme) or "https"
     host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
-    return f"{proto}://{host}"
+    if host and "localhost" not in host and "127.0.0.1" not in host:
+        if proto == "http" and "vercel.app" in host:
+            proto = "https"
+        return f"{proto}://{host}"
+    env = (os.environ.get("PUBLIC_BASE_URL") or os.environ.get("VERCEL_PROJECT_PRODUCTION_URL") or "").strip()
+    if env:
+        if not env.startswith("http"):
+            env = f"https://{env}"
+        return env.rstrip("/")
+    return "https://pagnemarket.vercel.app"
 
 
 LOW_STOCK_THRESHOLD = 3  # alert when stock drops under 3 pieces
