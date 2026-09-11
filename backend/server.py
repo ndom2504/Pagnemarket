@@ -200,6 +200,26 @@ async def login(body: UserLogin):
 async def me(user: dict = Depends(current_user)):
     return user_public(user)
 
+class ProfileUpdate(BaseModel):
+    firstName: Optional[str] = Field(default=None, min_length=1, max_length=60)
+    lastName: Optional[str] = Field(default=None, min_length=1, max_length=60)
+    phone: Optional[str] = Field(default=None, max_length=30)
+    city: Optional[str] = Field(default=None, max_length=80)
+    country: Optional[str] = Field(default=None, max_length=80)
+    avatar: Optional[str] = Field(default=None, max_length=500)
+    shopName: Optional[str] = Field(default=None, max_length=80)
+
+@api_router.put("/auth/me", response_model=UserOut)
+async def update_me(body: ProfileUpdate, user: dict = Depends(current_user)):
+    changes = {k: (v.strip() if isinstance(v, str) else v) for k, v in body.model_dump(exclude_unset=True).items()}
+    if not changes:
+        return user_public(user)
+    await db.users.update_one({"id": user["id"]}, {"$set": changes})
+    if "shopName" in changes and changes["shopName"]:
+        await db.products.update_many({"supplierId": user["id"]}, {"$set": {"supplierName": changes["shopName"]}})
+    updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return user_public(updated)
+
 # ------------------ CATALOG ROUTES ------------------
 
 @api_router.get("/categories")

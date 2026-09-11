@@ -21,6 +21,7 @@ type Ctx = {
   signUp: (data: any) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  updateProfile: (data: Partial<User>) => Promise<void>;
 };
 
 const AuthCtx = createContext<Ctx>(null as any);
@@ -76,8 +77,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const updateProfile = async (data: Partial<User>) => {
+    const me = await api<User>("/auth/me", { method: "PUT", body: JSON.stringify(data) });
+    setUser(me);
+  };
+
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, refresh }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, refresh, updateProfile }}>
       {children}
     </AuthCtx.Provider>
   );

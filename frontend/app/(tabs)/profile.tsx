@@ -37,7 +37,12 @@ export default function Profile() {
       contentContainerStyle={{ paddingBottom: 32 }}
     >
       <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
-        <Image source={{ uri: AVATAR }} style={styles.avatar} contentFit="cover" />
+        <Pressable testID="edit-avatar" onPress={() => router.push("/settings")} style={{ position: "relative" }}>
+          <Image source={{ uri: user?.avatar || AVATAR }} style={styles.avatar} contentFit="cover" />
+          <View style={styles.avatarBadge}>
+            <Icon name="camera" size={12} color={colors.onBrandSecondary} />
+          </View>
+        </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>
             {user?.firstName} {user?.lastName}
@@ -139,7 +144,7 @@ export default function Profile() {
         <MenuRow icon="shopping-bag" label="Mon panier" onPress={() => router.push("/cart")} testID="menu-cart" />
         <MenuRow icon="map-pin" label="Mes adresses" onPress={() => {}} testID="menu-addresses" />
         <MenuRow icon="credit-card" label="Moyens de paiement" onPress={() => {}} testID="menu-payments" />
-        <MenuRow icon="settings" label="Paramètres" onPress={() => {}} testID="menu-settings" />
+        <MenuRow icon="settings" label="Paramètres du compte" onPress={() => router.push("/settings")} testID="menu-settings" />
         <MenuRow icon="log-out" label="Se déconnecter" onPress={handleSignOut} testID="menu-signout" danger />
       </View>
     </ScrollView>
@@ -198,6 +203,19 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 2,
     borderColor: colors.surfaceInverse,
+  },
+  avatarBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    backgroundColor: colors.brandSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.surfaceSecondary,
   },
   name: { fontSize: 20, fontWeight: "500", color: colors.onSurface, letterSpacing: -0.5 },
   email: { color: colors.muted, marginTop: 2, fontSize: 13 },

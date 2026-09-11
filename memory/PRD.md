@@ -39,6 +39,8 @@ Marketplace mobile premium dédiée aux tissus pagne africains, aux modèles et 
 17. **Avis tissus** – après livraison, « Noter ce tissu » (1-5 étoiles + commentaire, un avis par tissu/commande) ; note moyenne du produit recalculée ; section « Avis des acheteurs » sur la fiche produit (`POST /api/reviews`, `GET /api/products/{id}/reviews`).
 18. **Alertes stock bas** – bannière in-app sur le dashboard fournisseur quand un tissu passe sous 3 pièces (`GET /api/supplier/alerts`), bouton Réapprovisionner → formulaire d'édition ; badge « Stock bas » dans Mes tissus.
 
+19. **Paramètres du compte** – `/settings` : photo de profil (caméra/galerie, recadrage carré, upload Object Storage, `PUT /api/auth/me`), prénom/nom/téléphone/ville/pays, nom de boutique (fournisseur, propagé aux produits). Avatar affiché dans le Profil.
+
 ## Business Enhancement Suggéré
 Système de commission marketplace (10% configurable) déjà supporté côté modèle de données → prêt à activer une "marketplace fee" pour monétiser dès le premier volume de commandes.
 
