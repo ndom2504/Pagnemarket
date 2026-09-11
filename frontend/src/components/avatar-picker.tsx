@@ -21,7 +21,7 @@ type Source = "camera" | "gallery";
 type Props = {
   uri?: string | null;
   initials?: string;
-  onChange: (url: string | null) => void;
+  onChange: (url: string | null) => void | Promise<void>;
 };
 
 export function AvatarPicker({ uri, initials, onChange }: Props) {
@@ -70,8 +70,8 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
     setOk(false);
     try {
       const up = await uploadImage(result.assets[0], { asAvatar: true });
+      await onChange(up.avatar || up.url);
       setOk(true);
-      onChange(up.avatar || up.url);
     } catch (e: any) {
       setError(e.message || "Échec de l'envoi de l'image.");
     } finally {
@@ -109,7 +109,7 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
             testID="avatar-remove"
             onPress={() => {
               setOk(false);
-              onChange(null);
+              void onChange(null);
             }}
             disabled={uploading}
           >

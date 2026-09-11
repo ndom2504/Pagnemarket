@@ -94,11 +94,11 @@ export async function uploadImage(
   const prepared = await prepareImageUpload(asset.uri, asset.base64);
   const data = await readImageBase64(prepared.uri, prepared.base64 || asset.base64);
   try {
-    const saved = await api<{ id?: string; url: string; avatar?: string }>("/uploads/image", {
+    const endpoint = opts.asAvatar ? "/profile/avatar" : "/uploads/image";
+    const saved = await api<{ id?: string; url: string; avatar?: string }>(endpoint, {
       method: "POST",
       body: JSON.stringify({
         data,
-        image: data,
         contentType: prepared.mimeType,
         fileName: prepared.fileName,
         asAvatar: !!opts.asAvatar,
@@ -107,6 +107,7 @@ export async function uploadImage(
     if (!saved?.url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");
     return saved;
   } catch (e: any) {
-    throw new Error(friendlyUploadError(e?.message || "Échec de l'envoi de l'image"));
+    const reason = friendlyUploadError(e?.message || "erreur inconnue");
+    throw new Error(`Échec de l'envoi : ${reason}`);
   }
 }
