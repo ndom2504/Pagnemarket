@@ -148,6 +148,8 @@ async def create_product(body: ProductIn, user: dict = Depends(current_supplier)
         "currency": "XAF",
         "supplierId": user["id"],
         "supplierName": user.get("shopName") or f"{user.get('firstName', '')} {user.get('lastName', '')}".strip(),
+        "country": user.get("country"),
+        "city": user.get("city"),
         "location": body.location or ", ".join([x for x in [user.get("city"), user.get("country")] if x]) or "Afrique",
         "rating": 0.0,
         "reviewsCount": 0,

@@ -15,6 +15,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/auth";
+import { CityPicker } from "@/src/components/city-picker";
+import { CountryPicker } from "@/src/components/country-picker";
+import { countryByName, type Country } from "@/src/countries";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
 
@@ -31,10 +35,12 @@ export default function Checkout() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [address, setAddress] = useState("");
-  const [city, setCity] = useState("Libreville");
-  const [country, setCountry] = useState("Gabon");
-  const [phone, setPhone] = useState("");
+  const [city, setCity] = useState(user?.city || "");
+  const [countryObj, setCountryObj] = useState<Country>(() => countryByName(user?.country));
+  const country = countryObj.name;
+  const [phone, setPhone] = useState(user?.phone || "");
   const [method, setMethod] = useState<"card" | "mobile">("mobile");
   const [operator, setOperator] = useState<Operator>("orange");
   const [momoPhone, setMomoPhone] = useState("");
@@ -42,6 +48,12 @@ export default function Checkout() {
   const [pending, setPending] = useState<any | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (user?.city) setCity(user.city);
+    if (user?.country) setCountryObj(countryByName(user.country));
+    if (user?.phone) setPhone(user.phone);
+  }, [user?.city, user?.country, user?.phone]);
 
   const config = useQuery({ queryKey: ["payments-config"], queryFn: () => api("/payments/config", { auth: false }) });
   const isLive = (config.data as any)?.mobileMoneyMode === "live";
@@ -112,7 +124,7 @@ export default function Checkout() {
   }, [pending?.transactionId]);
 
   const op = OPERATORS.find((o) => o.id === operator)!;
-  const canPay = !!address && !!phone && (method === "card" || (momoPhone || phone).length >= 8);
+  const canPay = !!address && !!city && !!country && !!phone && (method === "card" || (momoPhone || phone).length >= 8);
   const busy = place.isPending || momo.isPending;
 
   if (ok) {
@@ -193,24 +205,20 @@ export default function Checkout() {
           value={address}
           onChangeText={setAddress}
         />
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <TextInput
-            testID="input-city"
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Ville"
-            placeholderTextColor={colors.muted}
-            value={city}
-            onChangeText={setCity}
-          />
-          <TextInput
-            testID="input-country"
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Pays"
-            placeholderTextColor={colors.muted}
-            value={country}
-            onChangeText={setCountry}
-          />
-        </View>
+        <CountryPicker
+          value={countryObj}
+          onChange={(c) => {
+            setCountryObj(c);
+            setCity("");
+          }}
+          testID="input-country"
+        />
+        <CityPicker
+          countryIso={countryObj.iso}
+          value={city}
+          onChange={setCity}
+          testID="input-city"
+        />
         <TextInput
           testID="input-phone"
           style={styles.input}

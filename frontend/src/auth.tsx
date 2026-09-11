@@ -19,10 +19,11 @@ type Ctx = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (data: any) => Promise<void>;
-  sendOtp: (phone: string) => Promise<{ phone: string }>;
+  sendOtp: (phone: string, countryIso?: string) => Promise<{ phone: string }>;
   verifyOtp: (data: any) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  updateProfile: (data: Partial<User>) => Promise<User>;
 };
 
 const AuthCtx = createContext<Ctx>(null as any);
@@ -73,10 +74,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(r.user);
   };
 
-  const sendOtp = async (phone: string) => {
+  const sendOtp = async (phone: string, countryIso?: string) => {
     return api<{ phone: string }>("/auth/otp/send", {
       method: "POST",
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ phone, countryIso }),
       auth: false,
     });
   };
@@ -96,8 +97,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const updateProfile = async (data: Partial<User>) => {
+    const me = await api<User>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    setUser(me);
+    return me;
+  };
+
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, sendOtp, verifyOtp, signOut, refresh }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signUp, sendOtp, verifyOtp, signOut, refresh, updateProfile }}>
       {children}
     </AuthCtx.Provider>
   );

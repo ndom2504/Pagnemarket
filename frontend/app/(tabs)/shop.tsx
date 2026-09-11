@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,25 +14,44 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth";
+import { CityPicker } from "@/src/components/city-picker";
+import { CountryPicker } from "@/src/components/country-picker";
+import { ALL_COUNTRIES, countryByName, type Country } from "@/src/countries";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
 
 export default function Shop() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const params = useLocalSearchParams<{ category?: string }>();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>(params.category || "all");
   const [sort, setSort] = useState<string>("recent");
+  const [country, setCountry] = useState<Country>(ALL_COUNTRIES);
+  const [city, setCity] = useState("all");
+  const [countryReady, setCountryReady] = useState(false);
 
+  useEffect(() => {
+    if (countryReady) return;
+    if (user?.country) {
+      setCountry(countryByName(user.country));
+      if (user.city) setCity(user.city);
+      setCountryReady(true);
+    }
+  }, [user?.country, user?.city, countryReady]);
+
+  const countryParam = country.iso === "ALL" ? "all" : country.name;
+  const cityParam = country.iso === "ALL" || city === "all" ? "all" : city;
   const categories = useQuery({ queryKey: ["categories"], queryFn: () => api("/categories") });
   const products = useQuery({
-    queryKey: ["products", cat, q, sort],
+    queryKey: ["products", cat, q, sort, countryParam, cityParam],
     queryFn: () =>
       api(
         `/products?category=${cat}&q=${encodeURIComponent(q)}&sort=${
           sort === "recent" ? "" : sort
-        }`
+        }&country=${encodeURIComponent(countryParam)}&city=${encodeURIComponent(cityParam)}`
       ),
   });
 
@@ -90,6 +109,30 @@ export default function Shop() {
           }}
         />
 
+        <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 6, gap: 8 }}>
+          <CountryPicker
+            compact
+            allowAll
+            value={country}
+            onChange={(c) => {
+              setCountry(c);
+              setCity("all");
+            }}
+            testID="shop-country"
+          />
+          {country.iso !== "ALL" && (
+            <CityPicker
+              compact
+              allowAll
+              countryIso={country.iso}
+              value={city === "all" ? "" : city}
+              onChange={setCity}
+              placeholder="Toutes les villes"
+              testID="shop-city"
+            />
+          )}
+        </View>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -122,7 +165,13 @@ export default function Shop() {
       ) : products.data && (products.data as any[]).length === 0 ? (
         <View style={styles.empty}>
           <Icon name="package" size={48} color={colors.muted} />
-          <Text style={styles.emptyTxt}>La boutique est vide. Un fournisseur peut y publier ses tissus.</Text>
+          <Text style={styles.emptyTxt}>
+            {country.iso === "ALL"
+              ? "La boutique est vide. Un fournisseur peut y publier ses tissus."
+              : cityParam !== "all"
+                ? `Aucun tissu à ${city}, ${country.name}. Essayez toutes les villes ou un autre pays.`
+                : `Aucun tissu pour ${country.name}. Changez de pays ou choisissez « Tous les pays ».`}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -148,7 +197,10 @@ export default function Shop() {
                 <Text numberOfLines={1} style={styles.cardName}>
                   {item.name}
                 </Text>
-                <Text style={styles.cardVendor}>{item.supplierName}</Text>
+                <Text style={styles.cardVendor}>
+                  {item.supplierName}
+                  {item.location ? ` · ${item.location}` : item.country ? ` · ${item.country}` : ""}
+                </Text>
                 <View style={styles.cardBottom}>
                   <Text style={styles.cardPrice}>
                     {formatXAF(item.promoPrice || item.price)}
@@ -256,5 +308,5 @@ const styles = StyleSheet.create({
   rating: { flexDirection: "row", alignItems: "center", gap: 3 },
   ratingTxt: { color: colors.muted, fontSize: 11 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 40 },
-  emptyTxt: { color: colors.muted, fontSize: 14 },
+  emptyTxt: { color: colors.muted, fontSize: 14, textAlign: "center", lineHeight: 20 },
 });

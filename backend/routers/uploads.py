@@ -1,10 +1,13 @@
-"""Image uploads for suppliers (product photos) via Emergent Object Storage."""
+"""Image uploads (profile + product photos). Object storage, with DB fallback."""
+import base64
 import logging
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
+from pydantic import BaseModel
+from typing import Optional
 
 from deps import current_user, db, public_base_url
 from storage import APP_NAME, get_object, put_object
@@ -16,12 +19,23 @@ MAX_BYTES = 8 * 1024 * 1024
 ALLOWED = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic"}
 
 
-@router.post("/uploads/image")
-async def upload_image(request: Request, file: UploadFile = File(...), user: dict = Depends(current_user)):
-    content_type = (file.content_type or "").lower()
+class ImageJsonIn(BaseModel):
+    data: str
+    contentType: Optional[str] = "image/jpeg"
+    fileName: Optional[str] = None
+
+
+def _strip_data_url(raw: str) -> str:
+    s = (raw or "").strip()
+    if "," in s and s.lower().startswith("data:"):
+        return s.split(",", 1)[1]
+    return s
+
+
+async def _save_image(request: Request, user: dict, data: bytes, content_type: str, filename: Optional[str]):
+    content_type = (content_type or "").lower()
     if content_type not in ALLOWED:
         raise HTTPException(400, "Format d'image non supporté (JPEG, PNG, WebP)")
-    data = await file.read()
     if len(data) > MAX_BYTES:
         raise HTTPException(400, "Image trop lourde (max 8 Mo)")
     if not data:
@@ -29,32 +43,65 @@ async def upload_image(request: Request, file: UploadFile = File(...), user: dic
 
     file_id = str(uuid.uuid4())
     path = f"{APP_NAME}/uploads/{user['id']}/{file_id}.{ALLOWED[content_type]}"
+    backend = "object"
+    stored_path = path
+    stored_data = None
     try:
         result = await run_in_threadpool(put_object, path, data, content_type)
+        stored_path = result.get("path") or path
     except Exception as e:  # noqa: BLE001
         status = getattr(getattr(e, "response", None), "status_code", None)
         if status == 402:
             raise HTTPException(402, "Crédits de stockage épuisés, réessayez plus tard")
-        logger.exception("Upload failed")
-        raise HTTPException(502, "Échec de l'envoi de l'image")
+        logger.warning("Object storage unavailable, saving image in database: %s", e)
+        backend = "db"
+        stored_data = base64.b64encode(data).decode("ascii")
 
     await db.files.insert_one({
         "id": file_id,
         "ownerId": user["id"],
-        "path": result["path"],
+        "path": stored_path,
+        "backend": backend,
+        "data": stored_data,
         "contentType": content_type,
         "size": len(data),
-        "originalName": file.filename,
+        "originalName": filename,
     })
     return {"id": file_id, "url": f"{public_base_url(request)}/api/files/{file_id}"}
 
 
+@router.post("/uploads/image")
+async def upload_image(request: Request, file: UploadFile = File(...), user: dict = Depends(current_user)):
+    return await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
+
+
+@router.post("/uploads/image-json")
+async def upload_image_json(request: Request, body: ImageJsonIn, user: dict = Depends(current_user)):
+    try:
+        data = base64.b64decode(_strip_data_url(body.data), validate=False)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(400, "Image invalide")
+    ctype = (body.contentType or "image/jpeg").lower()
+    if ctype == "image/jpg":
+        ctype = "image/jpeg"
+    return await _save_image(request, user, data, ctype, body.fileName)
+
+
 @router.get("/files/{file_id}")
 async def get_file(file_id: str):
-    # Product photos are public marketplace content.
     doc = await db.files.find_one({"id": file_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Fichier introuvable")
+    if doc.get("backend") == "db" and doc.get("data"):
+        try:
+            content = base64.b64decode(doc["data"])
+        except Exception:  # noqa: BLE001
+            raise HTTPException(502, "Fichier indisponible")
+        return Response(
+            content=content,
+            media_type=doc.get("contentType") or "image/jpeg",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
     try:
         content, ctype = await run_in_threadpool(get_object, doc["path"])
     except Exception:  # noqa: BLE001

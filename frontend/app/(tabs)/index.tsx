@@ -25,8 +25,24 @@ export default function Home() {
   const router = useRouter();
   const { user } = useAuth();
   const categories = useQuery({ queryKey: ["categories"], queryFn: () => api("/categories") });
-  const trending = useQuery({ queryKey: ["trending"], queryFn: () => api("/products/trending") });
-  const creators = useQuery({ queryKey: ["creators"], queryFn: () => api("/creators") });
+  const trending = useQuery({
+    queryKey: ["trending", user?.country],
+    queryFn: () =>
+      api(
+        user?.country
+          ? `/products/trending?country=${encodeURIComponent(user.country)}`
+          : "/products/trending"
+      ),
+  });
+  const creators = useQuery({
+    queryKey: ["creators", user?.country],
+    queryFn: () =>
+      api(
+        user?.country
+          ? `/creators?country=${encodeURIComponent(user.country)}`
+          : "/creators"
+      ),
+  });
   const models = useQuery({ queryKey: ["models"], queryFn: () => api("/models") });
   const reco = useQuery({
     queryKey: ["recommendations"],
@@ -152,7 +168,10 @@ export default function Home() {
                 </View>
                 <View style={styles.recoInfo}>
                   <Text numberOfLines={1} style={styles.recoName}>{item.name}</Text>
-                  <Text style={styles.recoMeta}>{item.supplierName}</Text>
+                  <Text style={styles.recoMeta}>
+                    {item.supplierName}
+                    {item.location ? ` · ${item.location}` : ""}
+                  </Text>
                   <Text style={styles.recoPrice}>{formatXAF(item.promoPrice || item.price)}</Text>
                 </View>
               </Pressable>
@@ -192,7 +211,10 @@ export default function Home() {
               )}
               <View style={{ padding: 12 }}>
                 <Text numberOfLines={1} style={styles.prodName}>{item.name}</Text>
-                <Text style={styles.prodVendor}>{item.supplierName}</Text>
+                <Text style={styles.prodVendor}>
+                  {item.supplierName}
+                  {item.location ? ` · ${item.location}` : ""}
+                </Text>
                 <View style={styles.prodBottom}>
                   <Text style={styles.prodPrice}>{formatXAF(item.promoPrice || item.price)}</Text>
                   <View style={styles.rating}>
@@ -230,7 +252,9 @@ export default function Home() {
             <View style={styles.creatorInfo}>
               <Image source={{ uri: item.avatar }} style={styles.creatorAvatar} contentFit="cover" />
               <Text style={styles.creatorName}>{item.name}</Text>
-              <Text style={styles.creatorMeta}>{item.city} · {item.specialty}</Text>
+              <Text style={styles.creatorMeta}>
+                {[item.city, item.country].filter(Boolean).join(", ")} · {item.specialty}
+              </Text>
             </View>
           </Pressable>
         )}

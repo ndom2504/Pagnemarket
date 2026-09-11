@@ -15,9 +15,6 @@ import { Icon } from "@/src/icon";
 import { PAYMENT_LABEL, statusOf } from "@/src/order-status";
 import { colors } from "@/src/theme";
 
-const AVATAR =
-  "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=400&q=80";
-
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -37,12 +34,27 @@ export default function Profile() {
       contentContainerStyle={{ paddingBottom: 32 }}
     >
       <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
-        <Image source={{ uri: AVATAR }} style={styles.avatar} contentFit="cover" />
+        <Pressable testID="profile-avatar" onPress={() => router.push("/settings")}>
+          {user?.avatar ? (
+            <Image source={{ uri: user.avatar }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarInitial}>
+                {(user?.firstName?.[0] || "P").toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>
             {user?.firstName} {user?.lastName}
           </Text>
           <Text style={styles.email}>{user?.email}</Text>
+          {(user?.city || user?.country) && (
+            <Text style={styles.email}>
+              {[user?.city, user?.country].filter(Boolean).join(", ")}
+            </Text>
+          )}
           <View style={styles.rolesRow}>
             {(user?.roles || []).map((r) => (
               <View key={r} style={styles.rolePill}>
@@ -68,8 +80,10 @@ export default function Profile() {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>{user?.city || "—"}</Text>
-          <Text style={styles.statLabel}>Ville</Text>
+          <Text style={styles.statNumber} numberOfLines={1}>
+            {user?.country || user?.city || "—"}
+          </Text>
+          <Text style={styles.statLabel}>Pays</Text>
         </View>
       </View>
 
@@ -137,9 +151,8 @@ export default function Profile() {
         )}
         <MenuRow icon="heart" label="Mes favoris" onPress={() => router.push("/(tabs)/shop")} testID="menu-favs" />
         <MenuRow icon="shopping-bag" label="Mon panier" onPress={() => router.push("/cart")} testID="menu-cart" />
-        <MenuRow icon="map-pin" label="Mes adresses" onPress={() => {}} testID="menu-addresses" />
-        <MenuRow icon="credit-card" label="Moyens de paiement" onPress={() => {}} testID="menu-payments" />
-        <MenuRow icon="settings" label="Paramètres" onPress={() => {}} testID="menu-settings" />
+        <MenuRow icon="map-pin" label="Mes adresses" onPress={() => router.push("/settings")} testID="menu-addresses" />
+        <MenuRow icon="settings" label="Paramètres du compte" onPress={() => router.push("/settings")} testID="menu-settings" />
         <MenuRow icon="log-out" label="Se déconnecter" onPress={handleSignOut} testID="menu-signout" danger />
       </View>
     </ScrollView>
@@ -199,6 +212,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.surfaceInverse,
   },
+  avatarFallback: {
+    backgroundColor: colors.surfaceInverse,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitial: { color: colors.onSurfaceInverse, fontSize: 26, fontWeight: "500" },
   name: { fontSize: 20, fontWeight: "500", color: colors.onSurface, letterSpacing: -0.5 },
   email: { color: colors.muted, marginTop: 2, fontSize: 13 },
   rolesRow: { flexDirection: "row", gap: 6, marginTop: 8, flexWrap: "wrap" },

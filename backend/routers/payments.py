@@ -158,7 +158,12 @@ async def init_mobile_money(body: MobileMoneyInit, request: Request, user: dict 
     order["statusHistory"] = [status_entry("pending_payment")]
     await db.orders.insert_one(order.copy())
 
-    country_code, currency = COUNTRY_CODES.get(body.country.strip().lower(), ("CI", "XOF"))
+    mapped = COUNTRY_CODES.get(body.country.strip().lower())
+    if mapped:
+        country_code, currency = mapped
+    else:
+        from countries import iso_for_country
+        country_code, currency = iso_for_country(body.country), "XOF"
     amount = int(math.ceil(order["total"] / 5.0) * 5)
     transaction_id = f"pm_{uuid.uuid4().hex}"
     cfg = cinetpay_config()

@@ -3,6 +3,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
 
@@ -15,9 +16,15 @@ type Props = {
 
 export function TailorSheet({ visible, productName, garment, onClose }: Props) {
   const router = useRouter();
+  const { user } = useAuth();
   const creators = useQuery({
-    queryKey: ["creators"],
-    queryFn: () => api("/creators"),
+    queryKey: ["creators", user?.country],
+    queryFn: () =>
+      api(
+        user?.country
+          ? `/creators?country=${encodeURIComponent(user.country)}`
+          : "/creators"
+      ),
     enabled: visible,
   });
   const list: any[] = (creators.data as any[]) || [];
@@ -52,7 +59,7 @@ export function TailorSheet({ visible, productName, garment, onClose }: Props) {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{c.name}</Text>
                   <Text style={styles.meta}>
-                    {c.city} · {c.specialty}
+                    {[c.city, c.country].filter(Boolean).join(", ")} · {c.specialty}
                   </Text>
                 </View>
                 <Icon name="chevron-right" size={18} color={colors.muted} />

@@ -11,6 +11,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from countries import dial_for_iso
 from deps import create_token, db
 
 
@@ -36,7 +37,8 @@ RoleT = Literal["buyer", "supplier"]
 
 
 class OtpSendIn(BaseModel):
-    phone: str = Field(min_length=8, max_length=24)
+    phone: str = Field(min_length=6, max_length=24)
+    countryIso: Optional[str] = None
 
 
 class OtpVerifyIn(BaseModel):
@@ -46,23 +48,21 @@ class OtpVerifyIn(BaseModel):
     lastName: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = "Gabon"
+    countryIso: Optional[str] = None
     role: RoleT = "buyer"
     shopName: Optional[str] = None
 
 
-def normalize_phone(raw: str) -> str:
+def normalize_phone(raw: str, country_iso: Optional[str] = None) -> str:
     s = re.sub(r"[^\d+]", "", raw or "")
     if s.startswith("00"):
         s = "+" + s[2:]
-    if not s.startswith("+"):
-        digits = re.sub(r"\D", "", s)
-        if digits.startswith("241"):
-            s = "+" + digits
-        else:
-            if digits.startswith("0"):
-                digits = digits[1:]
-            s = "+241" + digits
-    return s
+    if s.startswith("+"):
+        return s
+    digits = re.sub(r"\D", "", s)
+    if digits.startswith("0"):
+        digits = digits[1:]
+    return f"{dial_for_iso(country_iso)}{digits}"
 
 
 def _twilio_creds():
@@ -80,14 +80,14 @@ async def _find_by_phone(phone: str):
 
 @router.post("/auth/otp/send")
 async def otp_send(body: OtpSendIn):
-    phone = normalize_phone(body.phone)
+    phone = normalize_phone(body.phone, body.countryIso)
     sid, token, service = _twilio_creds()
     url = f"https://verify.twilio.com/v2/Services/{service}/Verifications"
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.post(url, auth=(sid, token), data={"To": phone, "Channel": "sms"})
     if r.status_code >= 400:
         logger.warning("Twilio send failed %s %s", r.status_code, r.text[:300])
-        detail = "Impossible d'envoyer le SMS. Vérifiez le numéro (ex. +241 6X XX XX XX)."
+        detail = "Impossible d'envoyer le SMS. Vérifiez le numéro et l'indicatif du pays."
         try:
             msg = (r.json() or {}).get("message")
             if msg:
@@ -100,7 +100,7 @@ async def otp_send(body: OtpSendIn):
 
 @router.post("/auth/otp/verify")
 async def otp_verify(body: OtpVerifyIn):
-    phone = normalize_phone(body.phone)
+    phone = normalize_phone(body.phone, body.countryIso)
     sid, token, service = _twilio_creds()
     url = f"https://verify.twilio.com/v2/Services/{service}/VerificationCheck"
     async with httpx.AsyncClient(timeout=20) as client:
@@ -115,6 +115,13 @@ async def otp_verify(body: OtpVerifyIn):
         last = (body.lastName or "").strip()
         if not first or not last:
             raise HTTPException(400, "Nouveau numéro : indiquez votre prénom et votre nom")
+        if body.role == "supplier":
+            if not (body.city or "").strip():
+                raise HTTPException(400, "Indiquez la ville de votre boutique")
+            if not (body.country or "").strip():
+                raise HTTPException(400, "Indiquez le pays de votre boutique")
+            if not (body.shopName or "").strip():
+                raise HTTPException(400, "Indiquez le nom de votre boutique")
         uid = str(uuid.uuid4())
         dummy = bcrypt.hashpw(uuid.uuid4().hex.encode(), bcrypt.gensalt()).decode()
         user = {

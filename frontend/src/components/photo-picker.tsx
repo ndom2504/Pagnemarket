@@ -53,6 +53,7 @@ export function PhotoPicker({ images, onChange, max = 5 }: Props) {
       quality: 0.75,
       allowsMultipleSelection: source === "gallery",
       selectionLimit: Math.max(1, max - images.length),
+      base64: true,
     };
     const result =
       source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);

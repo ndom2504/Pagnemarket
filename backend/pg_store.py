@@ -72,6 +72,10 @@ def matches(doc: dict, query: Optional[dict]) -> bool:
             if not any(matches(doc, q) for q in expected):
                 return False
             continue
+        if key == "$and":
+            if not all(matches(doc, q) for q in expected):
+                return False
+            continue
         actual = _get(doc, key)
         if isinstance(expected, dict) and any(str(k).startswith("$") for k in expected):
             if "$in" in expected and actual not in expected["$in"]:

@@ -61,7 +61,12 @@ export default function SupplierDashboard() {
         </Pressable>
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={styles.title}>Espace fournisseur</Text>
-          <Text style={styles.subtitle}>{user?.shopName || `${user?.firstName} ${user?.lastName}`}</Text>
+          <Text style={styles.subtitle}>
+            {user?.shopName || `${user?.firstName} ${user?.lastName}`}
+            {user?.city || user?.country
+              ? ` · ${[user?.city, user?.country].filter(Boolean).join(", ")}`
+              : ""}
+          </Text>
         </View>
         <Pressable testID="supplier-products-link" style={styles.iconBtn} onPress={() => router.push("/supplier/products")}>
           <Icon name="grid" size={18} color={colors.onSurface} />

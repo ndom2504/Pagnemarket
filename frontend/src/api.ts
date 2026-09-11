@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { storage } from "@/src/utils/storage";
 
 const BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://pagnemarket.vercel.app").replace(/\/$/, "");
@@ -45,24 +44,41 @@ export function formatXAF(n: number): string {
   return `${Math.round(n).toLocaleString("fr-FR")} FCFA`;
 }
 
-export async function uploadImage(asset: { uri: string; fileName?: string | null; mimeType?: string | null }) {
-  const t = await loadToken();
-  const name = asset.fileName || `photo-${Date.now()}.jpg`;
-  const type = asset.mimeType || "image/jpeg";
-  const form = new FormData();
-  if (Platform.OS === "web") {
-    const blob = await (await fetch(asset.uri)).blob();
-    form.append("file", blob, name);
-  } else {
-    form.append("file", { uri: asset.uri, name, type } as any);
-  }
-  const res = await fetch(`${BASE_URL}/api/uploads/image`, {
-    method: "POST",
-    headers: t ? { Authorization: `Bearer ${t}` } : undefined,
-    body: form,
+function guessMime(asset: { uri: string; fileName?: string | null; mimeType?: string | null }) {
+  const named = (asset.fileName || asset.uri || "").toLowerCase();
+  if (asset.mimeType && asset.mimeType !== "image") return asset.mimeType;
+  if (named.endsWith(".png")) return "image/png";
+  if (named.endsWith(".webp")) return "image/webp";
+  if (named.endsWith(".heic") || named.endsWith(".heif")) return "image/heic";
+  return "image/jpeg";
+}
+
+async function readAsBase64(uri: string): Promise<string> {
+  const res = await fetch(uri);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Impossible de lire la photo"));
+    reader.onload = () => {
+      const text = String(reader.result || "");
+      const i = text.indexOf(",");
+      resolve(i >= 0 ? text.slice(i + 1) : text);
+    };
+    reader.readAsDataURL(blob);
   });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new Error((data && data.detail) || `Erreur ${res.status}`);
-  return data as { id: string; url: string };
+}
+
+export async function uploadImage(asset: {
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  base64?: string | null;
+}) {
+  const name = asset.fileName || `photo-${Date.now()}.jpg`;
+  const type = guessMime(asset);
+  const data = asset.base64 || (await readAsBase64(asset.uri));
+  return api<{ id: string; url: string }>("/uploads/image-json", {
+    method: "POST",
+    body: JSON.stringify({ data, contentType: type, fileName: name }),
+  });
 }

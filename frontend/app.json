@@ -11,8 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.tissuehub.gpxlrs",
       "infoPlist": {
-        "NSCameraUsageDescription": "Photographiez vos tissus pour les publier",
-        "NSPhotoLibraryUsageDescription": "Publiez les photos de vos tissus"
+        "NSCameraUsageDescription": "Photographiez votre profil ou vos tissus",
+        "NSPhotoLibraryUsageDescription": "Choisissez une photo de profil ou des tissus"
       }
     },
     "android": {
@@ -47,8 +47,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Publiez les photos de vos tissus",
-          "cameraPermission": "Photographiez vos tissus pour les publier"
+          "photosPermission": "Choisissez une photo de profil ou des tissus",
+          "cameraPermission": "Photographiez votre profil ou vos tissus"
         }
       ],
       "@react-native-vector-icons/feather"

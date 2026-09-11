@@ -15,11 +15,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
+import { CityPicker } from "@/src/components/city-picker";
+import { CountryPicker } from "@/src/components/country-picker";
+import { DEFAULT_COUNTRY, formatPhone, type Country } from "@/src/countries";
 import { colors } from "@/src/theme";
 import { Icon } from "@/src/icon";
 
 const HERO =
-  "https://images.unsplash.com/photo-1760907949889-eb62b7fd9f75?w=1200&q=80";
+  "https://images.unsplash.com/photo-1552710307-537199cd41c0?w=1600&q=80";
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
@@ -36,6 +39,7 @@ export default function AuthScreen() {
   const [code, setCode] = useState("");
   const [city, setCity] = useState("");
   const [shopName, setShopName] = useState("");
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [role, setRole] = useState<"buyer" | "supplier">("buyer");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -44,19 +48,35 @@ export default function AuthScreen() {
     router.replace(role === "supplier" && mode === "register" ? "/supplier" : "/(tabs)");
   };
 
+  const requireRegisterLocation = () => {
+    if (mode !== "register") return true;
+    if (!firstName.trim() || !lastName.trim()) {
+      setErr("Indiquez votre prénom et votre nom");
+      return false;
+    }
+    if (!city.trim()) {
+      setErr(role === "supplier"
+        ? "Choisissez la ville de votre boutique pour être visible des clients"
+        : "Choisissez votre ville");
+      return false;
+    }
+    if (role === "supplier" && !shopName.trim()) {
+      setErr("Indiquez le nom de votre boutique");
+      return false;
+    }
+    return true;
+  };
+
   const onSendOtp = async () => {
     setErr(null);
-    if (mode === "register" && (!firstName.trim() || !lastName.trim())) {
-      setErr("Indiquez votre prénom et votre nom");
-      return;
-    }
+    if (!requireRegisterLocation()) return;
     if (!phone.trim()) {
       setErr("Indiquez votre numéro de téléphone");
       return;
     }
     setLoading(true);
     try {
-      await sendOtp(phone.trim());
+      await sendOtp(formatPhone(phone.trim(), country), country.iso);
       setStep("code");
     } catch (e: any) {
       setErr(e.message || "Impossible d'envoyer le SMS");
@@ -70,12 +90,13 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       await verifyOtp({
-        phone: phone.trim(),
+        phone: formatPhone(phone.trim(), country),
         code: code.trim(),
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         city: city.trim(),
-        country: "Gabon",
+        country: country.name,
+        countryIso: country.iso,
         role,
         shopName: role === "supplier" && shopName.trim() ? shopName.trim() : undefined,
       });
@@ -98,13 +119,17 @@ export default function AuthScreen() {
       if (mode === "login") {
         await signIn(email.trim(), password);
       } else {
+        if (!requireRegisterLocation()) {
+          setLoading(false);
+          return;
+        }
         await signUp({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim(),
           password,
           city: city.trim(),
-          country: "Gabon",
+          country: country.name,
           role,
           shopName: role === "supplier" && shopName.trim() ? shopName.trim() : undefined,
         });
@@ -119,26 +144,27 @@ export default function AuthScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.surface }}
+      style={{ flex: 1, backgroundColor: colors.surfaceInverse }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      <Image source={{ uri: HERO }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      <LinearGradient
+        colors={["rgba(17,17,17,0.25)", "rgba(17,17,17,0.55)", "rgba(17,17,17,0.72)"]}
+        style={StyleSheet.absoluteFill}
+      />
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 24 + insets.bottom }}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 32 },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <Image source={{ uri: HERO }} style={StyleSheet.absoluteFill} contentFit="cover" />
-          <LinearGradient
-            colors={["rgba(17,17,17,0)", "rgba(17,17,17,0.75)", "#111111"]}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={[styles.heroContent, { paddingTop: insets.top + 24 }]}>
-            <Text style={styles.brand}>PagneMarket</Text>
-            <Text style={styles.tagline}>
-              Le pagne africain, votre style, votre marché.
-            </Text>
-          </View>
+        <View style={styles.brandBlock}>
+          <Text style={styles.brand}>PagneMarket</Text>
+          <Text style={styles.tagline}>
+            Le pagne africain, votre style, votre marché.
+          </Text>
         </View>
 
         <View style={styles.card}>
@@ -210,13 +236,19 @@ export default function AuthScreen() {
                   onChangeText={setLastName}
                 />
               </View>
-              <TextInput
-                testID="input-city"
-                style={styles.input}
-                placeholder="Ville"
-                placeholderTextColor={colors.muted}
+              <CountryPicker
+                value={country}
+                onChange={(c) => {
+                  setCountry(c);
+                  setCity("");
+                }}
+              />
+              <CityPicker
+                countryIso={country.iso}
                 value={city}
-                onChangeText={setCity}
+                onChange={setCity}
+                placeholder={role === "supplier" ? "Ville de la boutique" : "Ville"}
+                testID="input-city"
               />
               <View style={styles.rolesRow}>
                 {(["buyer", "supplier"] as const).map((r) => (
@@ -235,16 +267,25 @@ export default function AuthScreen() {
                 ))}
               </View>
               {role === "supplier" && (
-                <TextInput
-                  testID="input-shopName"
-                  style={styles.input}
-                  placeholder="Nom de votre boutique"
-                  placeholderTextColor={colors.muted}
-                  value={shopName}
-                  onChangeText={setShopName}
-                />
+                <>
+                  <TextInput
+                    testID="input-shopName"
+                    style={styles.input}
+                    placeholder="Nom de votre boutique"
+                    placeholderTextColor={colors.muted}
+                    value={shopName}
+                    onChangeText={setShopName}
+                  />
+                  <Text style={styles.hint}>
+                    Les clients de {city ? `${city}, ` : ""}{country.name} verront votre boutique en priorité.
+                  </Text>
+                </>
               )}
             </>
+          )}
+
+          {method === "otp" && mode === "login" && step === "form" && (
+            <CountryPicker value={country} onChange={setCountry} />
           )}
 
           {method === "otp" ? (
@@ -252,7 +293,7 @@ export default function AuthScreen() {
               <TextInput
                 testID="input-phone"
                 style={styles.input}
-                placeholder="Téléphone  +241 6X XX XX XX"
+                placeholder={`Téléphone  ${country.dial} …`}
                 placeholderTextColor={colors.muted}
                 keyboardType="phone-pad"
                 value={phone}
@@ -359,24 +400,34 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  hero: { height: 320, backgroundColor: colors.surfaceInverse },
-  heroContent: { flex: 1, paddingHorizontal: 24, justifyContent: "flex-end", paddingBottom: 32 },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    gap: 28,
+  },
+  brandBlock: { alignItems: "center", paddingHorizontal: 12 },
   brand: {
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: "500",
     color: colors.onSurfaceInverse,
     letterSpacing: -1,
     marginBottom: 8,
+    textAlign: "center",
   },
-  tagline: { color: colors.onSurfaceInverse, fontSize: 15, opacity: 0.9, lineHeight: 22 },
+  tagline: {
+    color: colors.onSurfaceInverse,
+    fontSize: 15,
+    opacity: 0.92,
+    lineHeight: 22,
+    textAlign: "center",
+  },
   card: {
-    marginTop: -20,
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 32,
+    borderRadius: 24,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 28,
   },
   tabs: {
     flexDirection: "row",
@@ -417,6 +468,7 @@ const styles = StyleSheet.create({
   },
   roleText: { color: colors.onSurface, fontSize: 13, fontWeight: "500" },
   roleTextActive: { color: colors.onBrandSecondary },
+  hint: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 12, marginTop: -4 },
   err: {
     color: colors.error,
     marginBottom: 12,

@@ -80,6 +80,7 @@ class Product(BaseModel):
     supplierId: str
     supplierName: str
     location: str = "Libreville, Gabon"
+    country: Optional[str] = None
     rating: float = 4.6
     reviewsCount: int = 0
     tags: List[str] = []
@@ -188,6 +189,13 @@ async def register(body: UserRegister):
         "shopName": body.shopName,
         "createdAt": datetime.now(timezone.utc),
     }
+    if body.role == "supplier":
+        if not (body.city or "").strip():
+            raise HTTPException(status_code=400, detail="Indiquez la ville de votre boutique")
+        if not (body.country or "").strip():
+            raise HTTPException(status_code=400, detail="Indiquez le pays de votre boutique")
+        if not (body.shopName or "").strip():
+            raise HTTPException(status_code=400, detail="Indiquez le nom de votre boutique")
     await db.users.insert_one(user_doc)
     return {"token": create_token(uid), "user": user_public(user_doc)}
 
@@ -198,9 +206,42 @@ async def login(body: UserLogin):
         raise HTTPException(status_code=401, detail="Email ou mot de passe invalide")
     return {"token": create_token(user["id"]), "user": user_public(user)}
 
+class UserUpdate(BaseModel):
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    phone: Optional[str] = None
+    country: Optional[str] = None
+    city: Optional[str] = None
+    shopName: Optional[str] = None
+    avatar: Optional[str] = None
+
+
 @api_router.get("/auth/me", response_model=UserOut)
 async def me(user: dict = Depends(current_user)):
     return user_public(user)
+
+
+@api_router.patch("/auth/me", response_model=UserOut)
+async def update_me(body: UserUpdate, user: dict = Depends(current_user)):
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "firstName" in patch and not str(patch["firstName"]).strip():
+        raise HTTPException(400, "Indiquez votre prénom")
+    if "lastName" in patch and not str(patch["lastName"]).strip():
+        raise HTTPException(400, "Indiquez votre nom")
+    if "firstName" in patch:
+        patch["firstName"] = str(patch["firstName"]).strip()
+    if "lastName" in patch:
+        patch["lastName"] = str(patch["lastName"]).strip()
+    if "shopName" in patch:
+        patch["shopName"] = str(patch["shopName"]).strip() or None
+    if "avatar" in patch:
+        patch["avatar"] = str(patch["avatar"]).strip() or None
+    if "supplier" in user.get("roles", []) and "city" in patch and not str(patch.get("city") or "").strip():
+        raise HTTPException(400, "Indiquez la ville de votre boutique")
+    patch["updatedAt"] = datetime.now(timezone.utc)
+    await db.users.update_one({"id": user["id"]}, {"$set": patch})
+    updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return user_public(updated)
 
 # ------------------ CATALOG ROUTES ------------------
 
@@ -219,17 +260,67 @@ async def get_categories():
     cats = await db.categories.find({}, {"_id": 0}).to_list(100)
     return cats or DEFAULT_CATEGORIES
 
-@api_router.get("/products")
-async def list_products(category: Optional[str] = None, q: Optional[str] = None, sort: Optional[str] = None):
-    query: dict = {}
-    if category and category != "all":
-        query["category"] = category
-    if q:
-        query["$or"] = [
-            {"name": {"$regex": q, "$options": "i"}},
-            {"description": {"$regex": q, "$options": "i"}},
-            {"tags": {"$regex": q, "$options": "i"}},
+def _country_clause(country: Optional[str]) -> Optional[dict]:
+    if not country or country.lower() in ("all", "tous"):
+        return None
+    return {
+        "$or": [
+            {"country": country},
+            {"location": {"$regex": country, "$options": "i"}},
         ]
+    }
+
+
+def _city_clause(city: Optional[str]) -> Optional[dict]:
+    if not city or city.lower() in ("all", "tous", "toutes les villes"):
+        return None
+    return {
+        "$or": [
+            {"city": city},
+            {"location": {"$regex": city, "$options": "i"}},
+        ]
+    }
+
+
+@api_router.get("/markets")
+async def list_markets():
+    products = await db.products.find({}, {"_id": 0, "country": 1, "location": 1}).to_list(2000)
+    names = set()
+    for p in products:
+        if p.get("country"):
+            names.add(p["country"])
+        loc = (p.get("location") or "")
+        if "," in loc:
+            names.add(loc.split(",")[-1].strip())
+    return sorted(n for n in names if n)
+
+
+@api_router.get("/products")
+async def list_products(
+    category: Optional[str] = None,
+    q: Optional[str] = None,
+    sort: Optional[str] = None,
+    country: Optional[str] = None,
+    city: Optional[str] = None,
+):
+    filters: list = []
+    if category and category != "all":
+        filters.append({"category": category})
+    if q:
+        filters.append({
+            "$or": [
+                {"name": {"$regex": q, "$options": "i"}},
+                {"description": {"$regex": q, "$options": "i"}},
+                {"tags": {"$regex": q, "$options": "i"}},
+            ]
+        })
+    country_q = _country_clause(country)
+    if country_q:
+        filters.append(country_q)
+    city_q = _city_clause(city)
+    if city_q:
+        filters.append(city_q)
+    query: dict = {"$and": filters} if len(filters) > 1 else (filters[0] if filters else {})
     cursor = db.products.find(query, {"_id": 0})
     if sort == "price_asc":
         cursor = cursor.sort("price", 1)
@@ -242,8 +333,12 @@ async def list_products(category: Optional[str] = None, q: Optional[str] = None,
     return await cursor.to_list(200)
 
 @api_router.get("/products/trending")
-async def trending_products():
-    return await db.products.find({}, {"_id": 0}).sort("rating", -1).limit(8).to_list(8)
+async def trending_products(country: Optional[str] = None):
+    query = _country_clause(country) or {}
+    items = await db.products.find(query, {"_id": 0}).sort("rating", -1).limit(8).to_list(8)
+    if not items and query:
+        items = await db.products.find({}, {"_id": 0}).sort("rating", -1).limit(8).to_list(8)
+    return items
 
 @api_router.get("/products/{pid}")
 async def get_product(pid: str):
@@ -253,8 +348,12 @@ async def get_product(pid: str):
     return p
 
 @api_router.get("/creators")
-async def list_creators():
-    return await db.creators.find({}, {"_id": 0}).to_list(100)
+async def list_creators(country: Optional[str] = None):
+    query = _country_clause(country) or {}
+    items = await db.creators.find(query, {"_id": 0}).to_list(100)
+    if not items and query:
+        items = await db.creators.find({}, {"_id": 0}).to_list(100)
+    return items
 
 @api_router.get("/creators/{cid}")
 async def get_creator(cid: str):
