@@ -63,6 +63,12 @@ export default function Models() {
 
       {models.isLoading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.brandPrimary} />
+      ) : !(data || []).length ? (
+        <View style={{ padding: 24, alignItems: "center" }}>
+          <Text style={{ color: colors.muted, textAlign: "center", fontSize: 13, lineHeight: 20 }}>
+            Aucune inspiration pour le moment. Les modèles apparaîtront ici.
+          </Text>
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }}

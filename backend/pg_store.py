@@ -308,6 +308,10 @@ class PgDatabase:
             dump(payload),
         )
 
+    async def wipe(self):
+        await self.ready()
+        await self.pool.execute("TRUNCATE TABLE docs")
+
     def close(self):
         pass
 

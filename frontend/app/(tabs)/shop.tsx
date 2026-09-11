@@ -122,7 +122,7 @@ export default function Shop() {
       ) : products.data && (products.data as any[]).length === 0 ? (
         <View style={styles.empty}>
           <Icon name="package" size={48} color={colors.muted} />
-          <Text style={styles.emptyTxt}>Aucun tissu trouvé.</Text>
+          <Text style={styles.emptyTxt}>La boutique est vide. Un fournisseur peut y publier ses tissus.</Text>
         </View>
       ) : (
         <FlatList

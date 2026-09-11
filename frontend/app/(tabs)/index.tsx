@@ -102,7 +102,11 @@ export default function Home() {
               style={styles.catCard}
               onPress={() => router.push(`/(tabs)/shop?category=${item.slug}`)}
             >
-              <Image source={{ uri: item.image }} style={styles.catImage} contentFit="cover" />
+              {item.image ? (
+                <Image source={{ uri: item.image }} style={styles.catImage} contentFit="cover" />
+              ) : (
+                <View style={[styles.catImage, { backgroundColor: colors.surfaceInverse }]} />
+              )}
               <LinearGradient
                 colors={["transparent", "rgba(17,17,17,0.85)"]}
                 style={StyleSheet.absoluteFill}
@@ -161,6 +165,12 @@ export default function Home() {
       <SectionTitle title="Tendances du moment" action="Voir tout" onAction={() => router.push("/(tabs)/shop")} />
       {trending.isLoading ? (
         <ActivityIndicator style={{ marginVertical: 24 }} color={colors.brandPrimary} />
+      ) : !(trending.data as any[])?.length ? (
+        <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+          <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 20 }}>
+            Aucun tissu pour l'instant. Inscrivez-vous en fournisseur pour publier vos pagnes, ou en client pour acheter dès qu'ils apparaissent.
+          </Text>
+        </View>
       ) : (
         <FlatList
           horizontal
@@ -197,6 +207,8 @@ export default function Home() {
       )}
 
       {/* Creators */}
+      {!!(creators.data as any[])?.length && (
+      <>
       <SectionTitle title="Tailleurs" subtitle="Ils cousent le tissu que vous choisissez." />
       <FlatList
         horizontal
@@ -223,8 +235,11 @@ export default function Home() {
           </Pressable>
         )}
       />
+      </>
+      )}
 
-      {/* Models */}
+      {!!(models.data as any[])?.length && (
+      <>
       <SectionTitle title="Inspirations à coudre" action="Voir tout" onAction={() => router.push("/(tabs)/models")} />
       <View style={styles.modelsGrid}>
         {(models.data || []).slice(0, 4).map((m: any) => (
@@ -243,6 +258,8 @@ export default function Home() {
           </Pressable>
         ))}
       </View>
+      </>
+      )}
     </ScrollView>
   );
 }

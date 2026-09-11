@@ -204,10 +204,20 @@ async def me(user: dict = Depends(current_user)):
 
 # ------------------ CATALOG ROUTES ------------------
 
+DEFAULT_CATEGORIES = [
+    {"id": "wax", "slug": "wax", "name": "Pagne Wax", "image": None},
+    {"id": "bazin", "slug": "bazin", "name": "Bazin", "image": None},
+    {"id": "kente", "slug": "kente", "name": "Kente", "image": None},
+    {"id": "bogolan", "slug": "bogolan", "name": "Bogolan", "image": None},
+    {"id": "vlisco", "slug": "vlisco", "name": "Vlisco", "image": None},
+    {"id": "accessoires", "slug": "accessoires", "name": "Accessoires", "image": None},
+]
+
+
 @api_router.get("/categories")
 async def get_categories():
     cats = await db.categories.find({}, {"_id": 0}).to_list(100)
-    return cats
+    return cats or DEFAULT_CATEGORIES
 
 @api_router.get("/products")
 async def list_products(category: Optional[str] = None, q: Optional[str] = None, sort: Optional[str] = None):
@@ -415,238 +425,6 @@ async def send_message(body: SendMessage, user: dict = Depends(current_user)):
 async def get_messages(conversation_id: str, user: dict = Depends(current_user)):
     return await db.messages.find({"conversationId": conversation_id}, {"_id": 0}).sort("createdAt", 1).to_list(500)
 
-# ------------------ SEED ------------------
-
-async def seed_database():
-    # Ensure demo buyer exists (idempotent)
-    demo_email = "demo@pagnemarket.com"
-    if not await db.users.find_one({"email": demo_email}):
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "firstName": "Demo",
-            "lastName": "User",
-            "email": demo_email,
-            "phone": None,
-            "passwordHash": hash_password("Demo1234!"),
-            "country": "Gabon",
-            "city": "Libreville",
-            "roles": ["buyer"],
-            "avatar": None,
-            "createdAt": datetime.now(timezone.utc),
-        })
-        logger.info("Demo user seeded: %s", demo_email)
-
-    # Demo supplier (owns "Maison Adjoua" products, id v1)
-    supplier_email = "fournisseur@pagnemarket.com"
-    if not await db.users.find_one({"email": supplier_email}):
-        await db.users.insert_one({
-            "id": "v1",
-            "firstName": "Adjoua",
-            "lastName": "Kouassi",
-            "email": supplier_email,
-            "phone": "+241 06 00 00 00",
-            "passwordHash": hash_password("Fournisseur1234!"),
-            "country": "Gabon",
-            "city": "Libreville",
-            "roles": ["supplier"],
-            "shopName": "Maison Adjoua",
-            "avatar": None,
-            "createdAt": datetime.now(timezone.utc),
-        })
-        logger.info("Demo supplier seeded: %s", supplier_email)
-
-    # Migration vendor -> supplier (naming change)
-    await db.users.update_many({"roles": "vendor"}, {"$set": {"roles.$": "supplier"}})
-    await db.products.update_many({"vendorId": {"$exists": True}}, {"$rename": {"vendorId": "supplierId", "vendorName": "supplierName"}})
-
-    if await db.categories.count_documents({}) == 0:
-        await seed_catalog()
-    await seed_demo_orders()
-    # Backfill status timelines for orders created before tracking existed
-    flow = ["confirmed", "processing", "shipped", "delivered"]
-    async for o in db.orders.find({"statusHistory": {"$exists": False}}, {"_id": 1, "status": 1, "createdAt": 1}):
-        st = o.get("status", "confirmed")
-        steps = flow[: flow.index(st) + 1] if st in flow else [st]
-        hist = [{"status": s, "at": o["createdAt"] + timedelta(hours=6 * i)} for i, s in enumerate(steps)]
-        await db.orders.update_one({"_id": o["_id"]}, {"$set": {"statusHistory": hist}})
-    # One-off: a low-stock demo product for the supplier alerts (Wax Pointe Noire -> 2 pièces)
-    if not await db.meta.find_one({"key": "lowstock_demo"}):
-        await db.products.update_one({"supplierId": "v1", "name": "Wax Pointe Noire"}, {"$set": {"stock": 2}})
-        await db.meta.insert_one({"key": "lowstock_demo"})
-
-
-async def seed_demo_orders():
-    """A few paid orders for the demo supplier so the dashboard has data (idempotent)."""
-    if await db.orders.count_documents({"seeded": True}) > 0:
-        return
-    buyer = await db.users.find_one({"email": "demo@pagnemarket.com"}, {"_id": 0})
-    products = await db.products.find({"supplierId": "v1"}, {"_id": 0}).to_list(10)
-    if not buyer or not products:
-        return
-    now = datetime.now(timezone.utc)
-    plan = [
-        (0, [(0, 2)], "confirmed", "mobile_money_orange"),
-        (0, [(1, 1)], "processing", "card"),
-        (1, [(0, 1), (2, 1)], "shipped", "mobile_money_mtn"),
-        (2, [(2, 3)], "delivered", "mobile_money_moov"),
-        (4, [(1, 2)], "delivered", "card"),
-        (6, [(0, 1)], "delivered", "mobile_money_orange"),
-    ]
-    docs = []
-    for days_ago, lines, status, method in plan:
-        items = []
-        for idx, qty in lines:
-            p = products[idx % len(products)]
-            items.append({
-                "productId": p["id"], "name": p["name"], "image": p["images"][0] if p.get("images") else None,
-                "quantity": qty, "price": p.get("promoPrice") or p["price"], "category": p["category"],
-                "supplierId": "v1", "supplierName": p["supplierName"],
-            })
-        created = now - timedelta(days=days_ago, hours=2 if days_ago else 0)
-        if days_ago == 0 and created.hour < 2:
-            created = now
-        flow = ["confirmed", "processing", "shipped", "delivered"]
-        steps = flow[: flow.index(status) + 1]
-        history = [{"status": st, "at": created + timedelta(hours=6 * i)} for i, st in enumerate(steps)]
-        docs.append({
-            "id": str(uuid.uuid4()), "userId": buyer["id"], "customerName": "Demo User", "items": items,
-            "supplierIds": ["v1"], "total": sum(i["price"] * i["quantity"] for i in items), "currency": "XAF",
-            "status": status, "paymentStatus": "paid", "address": "Quartier Louis", "city": "Libreville",
-            "country": "Gabon", "phone": "+241 07 00 00 00", "paymentMethod": method, "createdAt": created, "seeded": True,
-            "statusHistory": history,
-        })
-    await db.orders.insert_many(docs)
-    logger.info("Seeded %d demo orders", len(docs))
-
-
-async def seed_catalog():
-    logger.info("Seeding PagneMarket database…")
-    categories = [
-        {"id": str(uuid.uuid4()), "slug": "wax", "name": "Pagne Wax", "image": "https://images.unsplash.com/photo-1552710307-537199cd41c0?w=600&q=80"},
-        {"id": str(uuid.uuid4()), "slug": "bazin", "name": "Bazin", "image": "https://images.unsplash.com/photo-1596939454008-ecff9c3d1eb2?w=600&q=80"},
-        {"id": str(uuid.uuid4()), "slug": "kente", "name": "Kente", "image": "https://images.unsplash.com/photo-1591370874773-6702e8f12fd8?w=600&q=80"},
-        {"id": str(uuid.uuid4()), "slug": "bogolan", "name": "Bogolan", "image": "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&q=80"},
-        {"id": str(uuid.uuid4()), "slug": "vlisco", "name": "Vlisco", "image": "https://images.unsplash.com/photo-1610030006636-a4d5b8a8f5e2?w=600&q=80"},
-        {"id": str(uuid.uuid4()), "slug": "accessoires", "name": "Accessoires", "image": "https://images.unsplash.com/photo-1591370874773-6702e8f12fd8?w=600&q=80"},
-    ]
-    await db.categories.insert_many([c.copy() for c in categories])
-
-    suppliers = [
-        {"id": "v1", "name": "Maison Adjoua"},
-        {"id": "v2", "name": "Sahel Textiles"},
-        {"id": "v3", "name": "Cotonou Fabric House"},
-        {"id": "v4", "name": "Kwame & Fils"},
-        {"id": "v5", "name": "Atelier Dakar"},
-    ]
-    locations = ["Libreville, Gabon", "Douala, Cameroun", "Abidjan, Côte d'Ivoire", "Dakar, Sénégal", "Cotonou, Bénin"]
-
-    fabric_images = [
-        "https://images.unsplash.com/photo-1552710307-537199cd41c0?w=800&q=80",
-        "https://images.unsplash.com/photo-1596939454008-ecff9c3d1eb2?w=800&q=80",
-        "https://images.unsplash.com/photo-1591370874773-6702e8f12fd8?w=800&q=80",
-        "https://images.unsplash.com/photo-1610030006636-a4d5b8a8f5e2?w=800&q=80",
-        "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&q=80",
-        "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=800&q=80",
-        "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=800&q=80",
-        "https://images.unsplash.com/photo-1583334391651-4a19c1a3aef7?w=800&q=80",
-        "https://images.unsplash.com/photo-1594736797933-d0401ba2fe65?w=800&q=80",
-        "https://images.unsplash.com/photo-1768212566108-4ce4f329e4d2?w=800&q=80",
-    ]
-    names = [
-        ("Wax Royal Éclat", "wax", 12000),
-        ("Bazin Riche Nuit d'ivoire", "bazin", 28000),
-        ("Kente Doré Ashanti", "kente", 22000),
-        ("Bogolan Terre de Bamako", "bogolan", 15000),
-        ("Vlisco Élégance", "vlisco", 35000),
-        ("Wax Fleur d'Hibiscus", "wax", 9500),
-        ("Kente Feu Ancestral", "kente", 24000),
-        ("Bazin Perle Blanche", "bazin", 26000),
-        ("Wax Tropical", "wax", 11000),
-        ("Bogolan Symboles", "bogolan", 16500),
-        ("Wax Pointe Noire", "wax", 10500),
-        ("Vlisco Or Rouge", "vlisco", 38000),
-    ]
-    products = []
-    for i, (nm, cat, price) in enumerate(names):
-        supplier = suppliers[i % len(suppliers)]
-        products.append({
-            "id": str(uuid.uuid4()),
-            "name": nm,
-            "description": "Tissu authentique tissé à la main, motifs riches et couleurs profondes. Idéal pour tenues de cérémonie, robes et boubous d'exception.",
-            "category": cat,
-            "price": float(price),
-            "currency": "XAF",
-            "promoPrice": float(price * 0.85) if i % 4 == 0 else None,
-            "stock": 15 + i,
-            "images": [fabric_images[i % len(fabric_images)], fabric_images[(i + 3) % len(fabric_images)]],
-            "supplierId": supplier["id"],
-            "supplierName": supplier["name"],
-            "location": locations[i % len(locations)],
-            "rating": round(4.3 + (i % 5) * 0.12, 2),
-            "reviewsCount": 20 + i * 3,
-            "tags": [cat, "authentique", "premium"],
-            "createdAt": datetime.now(timezone.utc),
-        })
-    await db.products.insert_many([p.copy() for p in products])
-
-    creator_covers = [
-        "https://images.unsplash.com/photo-1760907949889-eb62b7fd9f75?w=1200&q=80",
-        "https://images.unsplash.com/photo-1594736797933-d0401ba2fe65?w=1200&q=80",
-        "https://images.unsplash.com/photo-1583334391651-4a19c1a3aef7?w=1200&q=80",
-        "https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?w=1200&q=80",
-    ]
-    creator_avatars = [
-        "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=400&q=80",
-        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80",
-        "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&q=80",
-        "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=400&q=80",
-    ]
-    creators = [
-        {"id": "c1", "name": "Aïcha Diallo", "city": "Dakar", "country": "Sénégal", "specialty": "Robes de cérémonie", "yearsExperience": 12, "rating": 4.9, "modelsCount": 8, "ordersCount": 240, "bio": "Créatrice pionnière de la mode africaine contemporaine, Aïcha marie tradition et lignes épurées.", "avatar": creator_avatars[0], "cover": creator_covers[0]},
-        {"id": "c2", "name": "Kwame Mensah", "city": "Accra", "country": "Ghana", "specialty": "Tenues Kente modernes", "yearsExperience": 8, "rating": 4.8, "modelsCount": 6, "ordersCount": 180, "bio": "Spécialiste du Kente revisité pour l'homme urbain africain.", "avatar": creator_avatars[1], "cover": creator_covers[1]},
-        {"id": "c3", "name": "Mariame Coulibaly", "city": "Bamako", "country": "Mali", "specialty": "Boubous & Bogolan", "yearsExperience": 15, "rating": 4.9, "modelsCount": 10, "ordersCount": 320, "bio": "Ambassadrice du Bogolan malien, elle crée des pièces uniques inspirées des symboles ancestraux.", "avatar": creator_avatars[2], "cover": creator_covers[2]},
-        {"id": "c4", "name": "Chiamaka Okafor", "city": "Lagos", "country": "Nigeria", "specialty": "Ankara couture", "yearsExperience": 10, "rating": 4.7, "modelsCount": 7, "ordersCount": 210, "bio": "Ankara couture d'exception, mariage entre héritage yoruba et coupes internationales.", "avatar": creator_avatars[3], "cover": creator_covers[3]},
-    ]
-    await db.creators.insert_many([c.copy() for c in creators])
-
-    model_images = [
-        "https://images.unsplash.com/photo-1760907949889-eb62b7fd9f75?w=800&q=80",
-        "https://images.unsplash.com/photo-1594736797933-d0401ba2fe65?w=800&q=80",
-        "https://images.unsplash.com/photo-1583334391651-4a19c1a3aef7?w=800&q=80",
-        "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=800&q=80",
-        "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=800&q=80",
-    ]
-    models_data = [
-        ("Robe Djénéba", "Robes", 45000, "c1"),
-        ("Ensemble Boubou Royal", "Boubous", 62000, "c3"),
-        ("Chemise Kente Urbain", "Chemises", 28000, "c2"),
-        ("Robe de mariage Aïcha", "Mariage", 180000, "c1"),
-        ("Tenue Cérémonie Bogolan", "Cérémonie", 75000, "c3"),
-        ("Ensemble Ankara Executive", "Ensembles", 55000, "c4"),
-        ("Pantalon Wax Slim", "Pantalons", 22000, "c2"),
-        ("Robe Bogolan Moderne", "Robes", 48000, "c3"),
-        ("Boubou Homme Prestige", "Boubous", 68000, "c4"),
-        ("Robe Enfant Fleurie", "Enfants", 18000, "c1"),
-    ]
-    models = []
-    for i, (nm, cat, price, cid) in enumerate(models_data):
-        creator = next(c for c in creators if c["id"] == cid)
-        models.append({
-            "id": str(uuid.uuid4()),
-            "name": nm,
-            "creatorId": cid,
-            "creatorName": creator["name"],
-            "category": cat,
-            "description": "Modèle unique confectionné à la main, coupe contemporaine et détails soignés. Peut être adapté à vos mesures.",
-            "indicativePrice": float(price),
-            "currency": "XAF",
-            "difficulty": ["Intermédiaire", "Avancé", "Expert"][i % 3],
-            "image": model_images[i % len(model_images)],
-            "fabricRecommendation": ["Wax", "Kente", "Bogolan", "Bazin"][i % 4],
-        })
-    await db.models.insert_many([m.copy() for m in models])
-    logger.info("Seed complete: %d products, %d models, %d creators.", len(products), len(models), len(creators))
-
 # ------------------ APP WIRING ------------------
 
 @api_router.get("/")
@@ -674,7 +452,6 @@ app.add_middleware(
 async def on_startup():
     if hasattr(db, "ready"):
         await db.ready()
-    await seed_database()
     try:
         await run_in_threadpool(init_storage)
         logger.info("Object storage ready")
