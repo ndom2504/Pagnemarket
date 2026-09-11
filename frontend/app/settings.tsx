@@ -95,6 +95,7 @@ export default function SettingsScreen() {
             try {
               if (url) {
                 setAvatar(url);
+                await updateProfile({ avatarUrl: url, avatar: url });
               } else {
                 await updateProfile({ avatarUrl: null, avatar: null });
                 setAvatar("");
