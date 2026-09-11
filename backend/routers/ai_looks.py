@@ -2,10 +2,13 @@
 import concurrent.futures
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Literal, Optional
 from urllib.parse import quote
+
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -107,6 +110,64 @@ def _try_emergent_image_timed(prompt: str, timeout: float = 12) -> Optional[byte
             return None
 
 
+FASHN_PROMPTS = {
+    "Robe": "African woman wearing an elegant midi dress sewn from this exact wax fabric print, full body, studio, luxury editorial",
+    "Boubou": "African model wearing a majestic flowing boubou made from this exact fabric print, full body, regal drape",
+    "Ensemble": "African model wearing a tailored two-piece set made from this exact fabric print, jacket and trousers",
+    "Chemise": "African model wearing an oversized shirt made from this exact fabric print, contemporary luxury",
+    "Pantalon": "African model wearing high-waisted tailored trousers made from this exact fabric print",
+    "Mariage": "African model in ceremonial wedding attire sewn from this exact fabric print, gold accents, haute couture",
+}
+
+
+def _fashn_key() -> str:
+    return (os.environ.get("API_FASHN") or os.environ.get("FASHN_API_KEY") or "").strip()
+
+
+def _try_fashn_product_to_model(product_image: str, garment: str) -> Optional[str]:
+    """Turn a fabric/product photo into a person wearing a garment cut from that cloth."""
+    key = _fashn_key()
+    if not key or not product_image:
+        return None
+    prompt = FASHN_PROMPTS.get(garment, FASHN_PROMPTS["Robe"])
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    try:
+        run = httpx.post(
+            "https://api.fashn.ai/v1/run",
+            headers=headers,
+            json={
+                "model_name": "product-to-model",
+                "inputs": {
+                    "product_image": product_image,
+                    "prompt": prompt,
+                    "aspect_ratio": "3:4",
+                    "resolution": "1k",
+                    "generation_mode": "fast",
+                    "output_format": "png",
+                },
+            },
+            timeout=30,
+        )
+        run.raise_for_status()
+        pred_id = (run.json() or {}).get("id")
+        if not pred_id:
+            return None
+        for _ in range(24):
+            time.sleep(2)
+            st = httpx.get(f"https://api.fashn.ai/v1/status/{pred_id}", headers=headers, timeout=20)
+            body = st.json() if st.content else {}
+            status = (body.get("status") or "").lower()
+            if status == "completed":
+                out = body.get("output") or []
+                return out[0] if out else None
+            if status in {"failed", "error"}:
+                logger.warning("FASHN failed: %s", body.get("error"))
+                return None
+    except Exception as e:  # noqa: BLE001
+        logger.warning("FASHN product-to-model failed: %s", e)
+    return None
+
+
 async def _store_png(request: Request, user_id: str, data: bytes) -> Optional[str]:
     file_id = str(uuid.uuid4())
     path = f"{APP_NAME}/looks/{user_id}/{file_id}.png"
@@ -132,17 +193,23 @@ async def generate_look(body: GenerateLookIn, request: Request, user: dict = Dep
     if not product:
         raise HTTPException(404, "Tissu introuvable")
 
+    fabric = (product.get("images") or [None])[0]
     prompt = _build_prompt(product, body.garment)
     seed = int(uuid.uuid4().hex[:8], 16) % 1_000_000
     source = "pollinations"
     image_url = _pollinations_url(prompt, seed)
 
-    png = await run_in_threadpool(_try_emergent_image_timed, prompt)
-    if png:
-        stored = await _store_png(request, user["id"], png)
-        if stored:
-            image_url = stored
-            source = "emergent"
+    fashn_url = await run_in_threadpool(_try_fashn_product_to_model, fabric, body.garment)
+    if fashn_url:
+        image_url = fashn_url
+        source = "fashn"
+    else:
+        png = await run_in_threadpool(_try_emergent_image_timed, prompt)
+        if png:
+            stored = await _store_png(request, user["id"], png)
+            if stored:
+                image_url = stored
+                source = "emergent"
 
     tailors = await db.creators.find({}, {"_id": 0}).to_list(8)
     look = {

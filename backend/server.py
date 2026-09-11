@@ -15,6 +15,7 @@ from routers import uploads as uploads_router
 from routers import reco as reco_router
 from routers import reviews as reviews_router
 from routers import ai_looks as ai_looks_router
+from routers import otp_auth as otp_auth_router
 from routers.payments import OrderDraft, build_order_from_cart
 from storage import init_storage
 
@@ -658,6 +659,7 @@ api_router.include_router(uploads_router.router)
 api_router.include_router(reco_router.router)
 api_router.include_router(reviews_router.router)
 api_router.include_router(ai_looks_router.router)
+api_router.include_router(otp_auth_router.router)
 app.include_router(api_router)
 
 app.add_middleware(

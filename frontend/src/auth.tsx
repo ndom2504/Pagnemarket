@@ -19,6 +19,8 @@ type Ctx = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (data: any) => Promise<void>;
+  sendOtp: (phone: string) => Promise<{ phone: string }>;
+  verifyOtp: (data: any) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -71,13 +73,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(r.user);
   };
 
+  const sendOtp = async (phone: string) => {
+    return api<{ phone: string }>("/auth/otp/send", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+      auth: false,
+    });
+  };
+
+  const verifyOtp = async (data: any) => {
+    const r = await api<{ token: string; user: User }>("/auth/otp/verify", {
+      method: "POST",
+      body: JSON.stringify(data),
+      auth: false,
+    });
+    await setToken(r.token);
+    setUser(r.user);
+  };
+
   const signOut = async () => {
     await setToken(null);
     setUser(null);
   };
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, refresh }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signUp, sendOtp, verifyOtp, signOut, refresh }}>
       {children}
     </AuthCtx.Provider>
   );

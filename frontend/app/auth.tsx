@@ -24,19 +24,74 @@ const HERO =
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, sendOtp, verifyOtp } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [method, setMethod] = useState<"otp" | "email">("otp");
+  const [step, setStep] = useState<"form" | "code">("form");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
   const [city, setCity] = useState("");
   const [shopName, setShopName] = useState("");
   const [role, setRole] = useState<"buyer" | "supplier">("buyer");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const goHome = () => {
+    router.replace(role === "supplier" && mode === "register" ? "/supplier" : "/(tabs)");
+  };
+
+  const onSendOtp = async () => {
+    setErr(null);
+    if (mode === "register" && (!firstName.trim() || !lastName.trim())) {
+      setErr("Indiquez votre prénom et votre nom");
+      return;
+    }
+    if (!phone.trim()) {
+      setErr("Indiquez votre numéro de téléphone");
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendOtp(phone.trim());
+      setStep("code");
+    } catch (e: any) {
+      setErr(e.message || "Impossible d'envoyer le SMS");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onVerifyOtp = async () => {
+    setErr(null);
+    setLoading(true);
+    try {
+      await verifyOtp({
+        phone: phone.trim(),
+        code: code.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        city: city.trim(),
+        country: "Gabon",
+        role,
+        shopName: role === "supplier" && shopName.trim() ? shopName.trim() : undefined,
+      });
+      goHome();
+    } catch (e: any) {
+      setErr(e.message || "Code incorrect");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onSubmit = async () => {
+    if (method === "otp") {
+      if (step === "form") return onSendOtp();
+      return onVerifyOtp();
+    }
     setErr(null);
     setLoading(true);
     try {
@@ -54,7 +109,7 @@ export default function AuthScreen() {
           shopName: role === "supplier" && shopName.trim() ? shopName.trim() : undefined,
         });
       }
-      router.replace(role === "supplier" && mode === "register" ? "/supplier" : "/(tabs)");
+      goHome();
     } catch (e: any) {
       setErr(e.message || "Une erreur est survenue");
     } finally {
@@ -91,7 +146,11 @@ export default function AuthScreen() {
             <Pressable
               testID="tab-login"
               style={[styles.tab, mode === "login" && styles.tabActive]}
-              onPress={() => setMode("login")}
+              onPress={() => {
+                setMode("login");
+                setStep("form");
+                setErr(null);
+              }}
             >
               <Text style={[styles.tabText, mode === "login" && styles.tabTextActive]}>
                 Connexion
@@ -100,12 +159,35 @@ export default function AuthScreen() {
             <Pressable
               testID="tab-register"
               style={[styles.tab, mode === "register" && styles.tabActive]}
-              onPress={() => setMode("register")}
+              onPress={() => {
+                setMode("register");
+                setStep("form");
+                setErr(null);
+              }}
             >
               <Text style={[styles.tabText, mode === "register" && styles.tabTextActive]}>
                 Inscription
               </Text>
             </Pressable>
+          </View>
+
+          <View style={styles.rolesRow}>
+            {(["otp", "email"] as const).map((m) => (
+              <Pressable
+                key={m}
+                testID={`method-${m}`}
+                onPress={() => {
+                  setMethod(m);
+                  setStep("form");
+                  setErr(null);
+                }}
+                style={[styles.roleChip, method === m && styles.roleChipActive]}
+              >
+                <Text style={[styles.roleText, method === m && styles.roleTextActive]}>
+                  {m === "otp" ? "SMS / OTP" : "Email"}
+                </Text>
+              </Pressable>
+            ))}
           </View>
 
           {mode === "register" && (
@@ -165,25 +247,51 @@ export default function AuthScreen() {
             </>
           )}
 
-          <TextInput
-            testID="input-email"
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={colors.muted}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            testID="input-password"
-            style={styles.input}
-            placeholder="Mot de passe"
-            placeholderTextColor={colors.muted}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          {method === "otp" ? (
+            step === "form" ? (
+              <TextInput
+                testID="input-phone"
+                style={styles.input}
+                placeholder="Téléphone  +241 6X XX XX XX"
+                placeholderTextColor={colors.muted}
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+              />
+            ) : (
+              <TextInput
+                testID="input-otp"
+                style={styles.input}
+                placeholder="Code reçu par SMS"
+                placeholderTextColor={colors.muted}
+                keyboardType="number-pad"
+                value={code}
+                onChangeText={setCode}
+              />
+            )
+          ) : (
+            <>
+              <TextInput
+                testID="input-email"
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TextInput
+                testID="input-password"
+                style={styles.input}
+                placeholder="Mot de passe"
+                placeholderTextColor={colors.muted}
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
+            </>
+          )}
 
           {err && (
             <Text testID="auth-error" style={styles.err}>
@@ -202,7 +310,13 @@ export default function AuthScreen() {
             ) : (
               <>
                 <Text style={styles.ctaText}>
-                  {mode === "login" ? "Se connecter" : "Créer mon compte"}
+                  {method === "otp"
+                    ? step === "form"
+                      ? "Recevoir le code SMS"
+                      : "Valider le code"
+                    : mode === "login"
+                      ? "Se connecter"
+                      : "Créer mon compte"}
                 </Text>
                 <Icon name="arrow-right" size={18} color={colors.onBrandPrimary} />
               </>
@@ -215,11 +329,28 @@ export default function AuthScreen() {
               : "Vous avez déjà un compte ? "}
             <Text
               testID="switch-mode"
-              onPress={() => setMode(mode === "login" ? "register" : "login")}
+              onPress={() => {
+                setMode(mode === "login" ? "register" : "login");
+                setStep("form");
+                setErr(null);
+              }}
               style={{ color: colors.brandSecondary }}
             >
               {mode === "login" ? "Créer un compte" : "Se connecter"}
             </Text>
+            {method === "otp" && step === "code" ? (
+              <Text
+                testID="otp-resend"
+                onPress={() => {
+                  setStep("form");
+                  setCode("");
+                  setErr(null);
+                }}
+                style={{ color: colors.brandSecondary }}
+              >
+                {"\n"}Changer de numéro
+              </Text>
+            ) : null}
           </Text>
         </View>
       </ScrollView>
