@@ -104,6 +104,9 @@ async def _from_json(request: Request, user: dict, payload: dict):
     return saved
 
 
+save_json_image = _from_json
+
+
 @router.post("/uploads/image")
 async def upload_image(request: Request, user: dict = Depends(current_user)):
     ctype = (request.headers.get("content-type") or "").lower()

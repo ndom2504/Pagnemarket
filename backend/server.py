@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 import logging
@@ -12,6 +12,7 @@ from deps import client, db, create_token, current_user, decrement_stock
 from routers import payments as payments_router
 from routers import supplier as supplier_router
 from routers import uploads as uploads_router
+from routers.uploads import save_json_image
 from routers import reco as reco_router
 from routers import reviews as reviews_router
 from routers import ai_looks as ai_looks_router
@@ -46,16 +47,16 @@ class UserLogin(BaseModel):
 
 class UserOut(BaseModel):
     id: str
-    firstName: str
-    lastName: str
-    email: str
+    firstName: str = ""
+    lastName: str = ""
+    email: str = ""
     phone: Optional[str] = None
     country: Optional[str] = None
     city: Optional[str] = None
-    roles: List[str]
+    roles: List[str] = []
     avatar: Optional[str] = None
     shopName: Optional[str] = None
-    createdAt: datetime
+    createdAt: Optional[datetime] = None
 
 class AuthResponse(BaseModel):
     token: str
@@ -222,12 +223,24 @@ class UserUpdate(BaseModel):
     avatar: Optional[str] = None
 
 
-@api_router.get("/auth/me", response_model=UserOut)
+@api_router.get("/auth/me")
 async def me(user: dict = Depends(current_user)):
     return user_public(user)
 
 
-@api_router.patch("/auth/me", response_model=UserOut)
+@api_router.post("/profile/avatar")
+async def set_profile_avatar(request: Request, user: dict = Depends(current_user)):
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    payload["asAvatar"] = True
+    return await save_json_image(request, user, payload)
+
+
+@api_router.patch("/auth/me")
 async def update_me(body: UserUpdate, user: dict = Depends(current_user)):
     patch = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
     if "firstName" in patch and not str(patch["firstName"]).strip():

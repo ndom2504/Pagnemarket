@@ -50,8 +50,9 @@ function formatApiError(data: any, status: number) {
   if (typeof raw === "string") return raw;
   if (Array.isArray(raw) && raw[0]) {
     const first = raw[0];
+    const loc = Array.isArray(first?.loc) ? first.loc.filter((x: any) => x !== "body" && x !== "response").join(".") : "";
     if (typeof first === "string") return first;
-    if (first?.msg) return first.msg;
+    if (first?.msg) return loc ? `${first.msg} (${loc})` : first.msg;
   }
   if (status === 422) return "Données invalides. Réessayez avec une photo plus légère.";
   return `Erreur ${status}`;
@@ -71,23 +72,20 @@ function guessMime(asset: { uri: string; fileName?: string | null; mimeType?: st
 }
 
 async function readAsBase64(uri: string): Promise<string> {
+  const dest = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}pm-avatar-${Date.now()}.jpg`;
   try {
-    return await FileSystem.readAsStringAsync(uri, {
+    await FileSystem.copyAsync({ from: uri, to: dest });
+    return await FileSystem.readAsStringAsync(dest, {
       encoding: FileSystem.EncodingType.Base64,
     });
   } catch {
-    const res = await fetch(uri);
-    const blob = await res.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error("Impossible de lire la photo"));
-      reader.onload = () => {
-        const text = String(reader.result || "");
-        const i = text.indexOf(",");
-        resolve(i >= 0 ? text.slice(i + 1) : text);
-      };
-      reader.readAsDataURL(blob);
-    });
+    try {
+      return await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+    } catch {
+      throw new Error("Impossible de lire la photo sur l'appareil");
+    }
   }
 }
 
@@ -104,7 +102,7 @@ export async function uploadImage(
   const type = guessMime(asset);
   const data = String(asset.base64 || "").trim() || (await readAsBase64(asset.uri));
   if (!data) throw new Error("Impossible de lire la photo");
-  return api<{ id: string; url: string; avatar?: string }>("/uploads/image", {
+  return api<{ id: string; url: string; avatar?: string }>("/profile/avatar", {
     method: "POST",
     body: JSON.stringify({
       data,
