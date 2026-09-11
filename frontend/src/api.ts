@@ -1,5 +1,5 @@
 import { storage } from "@/src/utils/storage";
-import { API_BASE_URL, prepareImageUpload, readImageBase64, uploadAvatarBinary } from "@/src/media";
+import { API_BASE_URL, imageToJpegBase64 } from "@/src/media";
 
 const KEY = "pm_token";
 let cachedToken: string | null = null;
@@ -17,6 +17,14 @@ export async function loadToken(): Promise<string | null> {
   return cachedToken;
 }
 
+class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export async function api<T = any>(
   path: string,
   opts: RequestInit & { auth?: boolean } = {}
@@ -29,7 +37,12 @@ export async function api<T = any>(
     const t = await loadToken();
     if (t) headers.Authorization = `Bearer ${t}`;
   }
-  const res = await fetch(`${API_BASE_URL}/api${path}`, { ...opts, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}/api${path}`, { ...opts, headers });
+  } catch {
+    throw new ApiError("Pas de connexion. Réessayez.", 0);
+  }
   const text = await res.text();
   let data: any = null;
   try {
@@ -38,7 +51,7 @@ export async function api<T = any>(
     data = null;
   }
   if (!res.ok) {
-    throw new Error(formatApiError(data, res.status));
+    throw new ApiError(formatApiError(data, res.status), res.status);
   }
   return data as T;
 }
@@ -60,6 +73,9 @@ function formatApiError(data: any, status: number) {
 export function friendlyUploadError(raw: string, status?: number) {
   const msg = String(raw || "").trim();
   const lower = msg.toLowerCase();
+  if (status === 0 || lower.includes("network") || lower.includes("failed to fetch")) {
+    return "Pas de connexion. Réessayez.";
+  }
   if (status === 401 || lower.includes("not authenticated") || lower.includes("invalid token")) {
     return "Reconnectez-vous pour envoyer une photo.";
   }
@@ -70,11 +86,11 @@ export function friendlyUploadError(raw: string, status?: number) {
   if (status === 422 || lower.includes("field required")) {
     return "La photo n'a pas pu être envoyée. Réessayez.";
   }
-  if (status === 404 || lower === "not found" || lower.includes("not found")) {
-    return "L'envoi n'a pas atteint le serveur. Vérifiez le réseau, puis réessayez.";
+  if (status === 404) {
+    return `La route d'envoi est introuvable (${status}). Rechargez l'application.`;
   }
-  if (lower.includes("network") || lower.includes("failed to fetch")) {
-    return "Pas de connexion. Réessayez.";
+  if (lower.includes("file") && lower.includes("not found")) {
+    return "Impossible de lire la photo sur l'appareil.";
   }
   if (msg) return msg;
   return "Échec de l'envoi de l'image. Réessayez.";
@@ -84,20 +100,6 @@ export function formatXAF(n: number): string {
   return `${Math.round(n).toLocaleString("fr-FR")} FCFA`;
 }
 
-function parseUploadResponse(body: string, status: number) {
-  let result: any = null;
-  try {
-    result = body ? JSON.parse(body) : null;
-  } catch {
-    result = null;
-  }
-  if (status < 200 || status >= 300) {
-    throw new Error(friendlyUploadError(formatApiError(result, status), status));
-  }
-  if (!result?.url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");
-  return result as { id?: string; url: string; avatar?: string };
-}
-
 export async function uploadImage(
   asset: { uri: string; base64?: string | null },
   opts: { asAvatar?: boolean } = {}
@@ -105,27 +107,21 @@ export async function uploadImage(
   const token = await loadToken();
   if (!token) throw new Error("Reconnectez-vous pour envoyer une photo.");
 
-  const prepared = await prepareImageUpload(asset.uri, asset.base64);
+  const data = await imageToJpegBase64(asset.uri, asset.base64);
   try {
-    if (opts.asAvatar) {
-      const response = await uploadAvatarBinary(prepared, token);
-      return parseUploadResponse(response.body, response.status);
-    }
-
-    const data = await readImageBase64(prepared.uri, prepared.base64 || asset.base64);
-    const saved = await api<{ id?: string; url: string; avatar?: string }>("/uploads/image", {
+    const saved = await api<{ id?: string; url: string; avatar?: string }>("/uploads/image-json", {
       method: "POST",
       body: JSON.stringify({
         data,
-        contentType: prepared.mimeType,
-        fileName: prepared.fileName,
+        contentType: "image/jpeg",
+        fileName: `photo-${Date.now()}.jpg`,
         asAvatar: !!opts.asAvatar,
       }),
     });
     if (!saved?.url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");
     return saved;
   } catch (e: any) {
-    const reason = friendlyUploadError(e?.message || "erreur inconnue");
-    throw new Error(`Échec de l'envoi : ${reason}`);
+    const status = typeof e?.status === "number" ? e.status : undefined;
+    throw new Error(`Échec de l'envoi : ${friendlyUploadError(e?.message || "", status)}`);
   }
 }

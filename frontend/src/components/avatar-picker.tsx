@@ -57,9 +57,8 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
   const launch = async (source: Source) => {
     const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: ["images"],
-      quality: 0.7,
-      allowsEditing: true,
-      aspect: [1, 1],
+      quality: 0.6,
+      allowsEditing: false,
       base64: true,
     };
     const result =
@@ -68,20 +67,12 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
     setUploading(true);
     setError(null);
     setOk(false);
-    let url: string;
     try {
       const up = await uploadImage(result.assets[0], { asAvatar: true });
-      url = up.avatar || up.url;
-    } catch (e: any) {
-      setError(e.message || "Échec de l'envoi de l'image.");
-      setUploading(false);
-      return;
-    }
-    try {
-      await onChange(url);
+      await onChange(up.avatar || up.url);
       setOk(true);
     } catch (e: any) {
-      setError(e.message || "Photo envoyée, mais le profil n'a pas pu être actualisé.");
+      setError(e.message || "Échec de l'envoi de l'image.");
     } finally {
       setUploading(false);
     }
@@ -106,7 +97,7 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
         </View>
       </Pressable>
       <Text style={[styles.hint, ok && !uploading ? styles.hintOk : null]}>
-        {uploading ? "Envoi de la photo…" : ok ? "Photo enregistrée" : "Appuyez pour choisir et recadrer"}
+        {uploading ? "Envoi de la photo…" : ok ? "Photo enregistrée" : "Appuyez pour choisir dans la galerie"}
       </Text>
       <View style={styles.actions}>
         <Pressable testID="avatar-camera" onPress={() => start("camera")} disabled={uploading}>
