@@ -23,6 +23,7 @@ class ImageJsonIn(BaseModel):
     data: str
     contentType: Optional[str] = "image/jpeg"
     fileName: Optional[str] = None
+    asAvatar: Optional[bool] = False
 
 
 def _strip_data_url(raw: str) -> str:
@@ -32,10 +33,17 @@ def _strip_data_url(raw: str) -> str:
     return s
 
 
+def _normalize_type(content_type: Optional[str]) -> str:
+    ctype = (content_type or "image/jpeg").split(";", 1)[0].strip().lower()
+    if ctype == "image/jpg" or ctype == "image/pjpeg":
+        ctype = "image/jpeg"
+    if ctype not in ALLOWED:
+        ctype = "image/jpeg"
+    return ctype
+
+
 async def _save_image(request: Request, user: dict, data: bytes, content_type: str, filename: Optional[str]):
-    content_type = (content_type or "").lower()
-    if content_type not in ALLOWED:
-        raise HTTPException(400, "Format d'image non supporté (JPEG, PNG, WebP)")
+    content_type = _normalize_type(content_type)
     if len(data) > MAX_BYTES:
         raise HTTPException(400, "Image trop lourde (max 8 Mo)")
     if not data:
@@ -76,10 +84,14 @@ async def _from_json(request: Request, user: dict, payload: dict):
         data = base64.b64decode(_strip_data_url(body.data), validate=False)
     except Exception:  # noqa: BLE001
         raise HTTPException(400, "Image invalide")
-    ctype = (body.contentType or "image/jpeg").lower()
-    if ctype == "image/jpg":
-        ctype = "image/jpeg"
-    return await _save_image(request, user, data, ctype, body.fileName)
+    saved = await _save_image(request, user, data, body.contentType, body.fileName)
+    if body.asAvatar:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"avatar": saved["url"]}},
+        )
+        saved["avatar"] = saved["url"]
+    return saved
 
 
 @router.post("/uploads/image")

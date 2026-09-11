@@ -39,11 +39,21 @@ export async function api<T = any>(
     data = null;
   }
   if (!res.ok) {
-    const raw = data && (data.detail || data.message);
-    const msg = typeof raw === "string" ? raw : `Erreur ${res.status}`;
-    throw new Error(msg);
+    throw new Error(formatApiError(data, res.status));
   }
   return data as T;
+}
+
+function formatApiError(data: any, status: number) {
+  const raw = data && (data.detail ?? data.message);
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw) && raw[0]) {
+    const first = raw[0];
+    if (typeof first === "string") return first;
+    if (first?.msg) return first.msg;
+  }
+  if (status === 422) return "Données invalides. Réessayez avec une photo plus légère.";
+  return `Erreur ${status}`;
 }
 
 export function formatXAF(n: number): string {
@@ -74,17 +84,21 @@ async function readAsBase64(uri: string): Promise<string> {
   });
 }
 
-export async function uploadImage(asset: {
-  uri: string;
-  fileName?: string | null;
-  mimeType?: string | null;
-  base64?: string | null;
-}) {
+export async function uploadImage(
+  asset: {
+    uri: string;
+    fileName?: string | null;
+    mimeType?: string | null;
+    base64?: string | null;
+  },
+  opts: { asAvatar?: boolean } = {}
+) {
   const name = asset.fileName || `photo-${Date.now()}.jpg`;
   const type = guessMime(asset);
   const data = asset.base64 || (await readAsBase64(asset.uri));
-  return api<{ id: string; url: string }>("/uploads/image", {
+  if (!data) throw new Error("Impossible de lire la photo");
+  return api<{ id: string; url: string; avatar?: string }>("/uploads/image", {
     method: "POST",
-    body: JSON.stringify({ data, contentType: type, fileName: name }),
+    body: JSON.stringify({ data, contentType: type, fileName: name, asAvatar: !!opts.asAvatar }),
   });
 }

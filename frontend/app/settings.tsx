@@ -23,7 +23,7 @@ import { colors } from "@/src/theme";
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, refresh } = useAuth();
   const isSupplier = !!user?.roles?.includes("supplier");
 
   const [firstName, setFirstName] = useState(user?.firstName || "");
@@ -91,12 +91,12 @@ export default function SettingsScreen() {
           initials={initials}
           onChange={async (url) => {
             setAvatar(url);
+            setOk(true);
+            setErr(null);
             try {
-              await updateProfile({ avatar: url });
-              setOk(true);
-              setErr(null);
-            } catch (e: any) {
-              setErr(e.message || "Photo enregistrée localement, échec de la sauvegarde");
+              await refresh();
+            } catch {
+              /* la photo est déjà enregistrée avec l'envoi */
             }
           }}
         />

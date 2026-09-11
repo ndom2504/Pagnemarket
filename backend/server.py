@@ -153,18 +153,24 @@ def verify_password(pw: str, hashed: str) -> bool:
         return False
 
 def user_public(u: dict) -> dict:
+    created = u.get("createdAt") or datetime.now(timezone.utc)
+    if isinstance(created, str):
+        try:
+            created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+        except ValueError:
+            created = datetime.now(timezone.utc)
     return {
         "id": u["id"],
-        "firstName": u.get("firstName", ""),
-        "lastName": u.get("lastName", ""),
-        "email": u["email"],
+        "firstName": u.get("firstName") or "",
+        "lastName": u.get("lastName") or "",
+        "email": u.get("email") or "",
         "phone": u.get("phone"),
         "country": u.get("country"),
         "city": u.get("city"),
-        "roles": u.get("roles", ["buyer"]),
+        "roles": u.get("roles") or ["buyer"],
         "avatar": u.get("avatar"),
         "shopName": u.get("shopName"),
-        "createdAt": u.get("createdAt", datetime.now(timezone.utc)),
+        "createdAt": created,
     }
 
 # ------------------ AUTH ROUTES ------------------
@@ -223,7 +229,7 @@ async def me(user: dict = Depends(current_user)):
 
 @api_router.patch("/auth/me", response_model=UserOut)
 async def update_me(body: UserUpdate, user: dict = Depends(current_user)):
-    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    patch = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
     if "firstName" in patch and not str(patch["firstName"]).strip():
         raise HTTPException(400, "Indiquez votre prénom")
     if "lastName" in patch and not str(patch["lastName"]).strip():
@@ -241,7 +247,7 @@ async def update_me(body: UserUpdate, user: dict = Depends(current_user)):
     patch["updatedAt"] = datetime.now(timezone.utc)
     await db.users.update_one({"id": user["id"]}, {"$set": patch})
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0})
-    return user_public(updated)
+    return user_public(updated or {**user, **patch})
 
 # ------------------ CATALOG ROUTES ------------------
 

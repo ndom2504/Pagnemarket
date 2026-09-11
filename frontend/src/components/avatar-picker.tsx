@@ -66,7 +66,7 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
     if (result.canceled || !result.assets[0]) return;
     setUploading(true);
     try {
-      const up = await uploadImage(result.assets[0]);
+      const up = await uploadImage(result.assets[0], { asAvatar: true });
       onChange(up.url);
     } catch (e: any) {
       setError(e.message || "Échec de l'envoi");
