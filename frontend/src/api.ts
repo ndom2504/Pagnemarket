@@ -1,3 +1,4 @@
+import * as FileSystem from "expo-file-system/legacy";
 import { storage } from "@/src/utils/storage";
 
 const BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://pagnemarket.vercel.app").replace(/\/$/, "");
@@ -70,18 +71,24 @@ function guessMime(asset: { uri: string; fileName?: string | null; mimeType?: st
 }
 
 async function readAsBase64(uri: string): Promise<string> {
-  const res = await fetch(uri);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Impossible de lire la photo"));
-    reader.onload = () => {
-      const text = String(reader.result || "");
-      const i = text.indexOf(",");
-      resolve(i >= 0 ? text.slice(i + 1) : text);
-    };
-    reader.readAsDataURL(blob);
-  });
+  try {
+    return await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  } catch {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Impossible de lire la photo"));
+      reader.onload = () => {
+        const text = String(reader.result || "");
+        const i = text.indexOf(",");
+        resolve(i >= 0 ? text.slice(i + 1) : text);
+      };
+      reader.readAsDataURL(blob);
+    });
+  }
 }
 
 export async function uploadImage(
@@ -95,10 +102,16 @@ export async function uploadImage(
 ) {
   const name = asset.fileName || `photo-${Date.now()}.jpg`;
   const type = guessMime(asset);
-  const data = asset.base64 || (await readAsBase64(asset.uri));
+  const data = String(asset.base64 || "").trim() || (await readAsBase64(asset.uri));
   if (!data) throw new Error("Impossible de lire la photo");
   return api<{ id: string; url: string; avatar?: string }>("/uploads/image", {
     method: "POST",
-    body: JSON.stringify({ data, contentType: type, fileName: name, asAvatar: !!opts.asAvatar }),
+    body: JSON.stringify({
+      data,
+      image: data,
+      contentType: type,
+      fileName: name,
+      asAvatar: !!opts.asAvatar,
+    }),
   });
 }

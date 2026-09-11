@@ -20,10 +20,15 @@ ALLOWED = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image
 
 
 class ImageJsonIn(BaseModel):
-    data: str
+    data: Optional[str] = None
+    image: Optional[str] = None
+    base64: Optional[str] = None
     contentType: Optional[str] = "image/jpeg"
     fileName: Optional[str] = None
     asAvatar: Optional[bool] = False
+
+    def raw(self) -> str:
+        return (self.data or self.image or self.base64 or "").strip()
 
 
 def _strip_data_url(raw: str) -> str:
@@ -79,9 +84,14 @@ async def _save_image(request: Request, user: dict, data: bytes, content_type: s
 
 
 async def _from_json(request: Request, user: dict, payload: dict):
-    body = ImageJsonIn.model_validate(payload)
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Photo manquante. Réessayez.")
+    body = ImageJsonIn.model_validate({k: v for k, v in payload.items() if v is not None})
+    raw = body.raw()
+    if not raw:
+        raise HTTPException(400, "Photo manquante. Réessayez.")
     try:
-        data = base64.b64decode(_strip_data_url(body.data), validate=False)
+        data = base64.b64decode(_strip_data_url(raw), validate=False)
     except Exception:  # noqa: BLE001
         raise HTTPException(400, "Image invalide")
     saved = await _save_image(request, user, data, body.contentType, body.fileName)
