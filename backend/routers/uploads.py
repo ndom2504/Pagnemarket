@@ -70,13 +70,8 @@ async def _save_image(request: Request, user: dict, data: bytes, content_type: s
     return {"id": file_id, "url": f"{public_base_url(request)}/api/files/{file_id}"}
 
 
-@router.post("/uploads/image")
-async def upload_image(request: Request, file: UploadFile = File(...), user: dict = Depends(current_user)):
-    return await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
-
-
-@router.post("/uploads/image-json")
-async def upload_image_json(request: Request, body: ImageJsonIn, user: dict = Depends(current_user)):
+async def _from_json(request: Request, user: dict, payload: dict):
+    body = ImageJsonIn.model_validate(payload)
     try:
         data = base64.b64decode(_strip_data_url(body.data), validate=False)
     except Exception:  # noqa: BLE001
@@ -85,6 +80,23 @@ async def upload_image_json(request: Request, body: ImageJsonIn, user: dict = De
     if ctype == "image/jpg":
         ctype = "image/jpeg"
     return await _save_image(request, user, data, ctype, body.fileName)
+
+
+@router.post("/uploads/image")
+async def upload_image(request: Request, user: dict = Depends(current_user)):
+    ctype = (request.headers.get("content-type") or "").lower()
+    if "application/json" in ctype:
+        return await _from_json(request, user, await request.json())
+    form = await request.form()
+    file = form.get("file")
+    if not isinstance(file, UploadFile):
+        raise HTTPException(400, "Fichier image manquant")
+    return await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
+
+
+@router.post("/uploads/image-json")
+async def upload_image_json(request: Request, body: ImageJsonIn, user: dict = Depends(current_user)):
+    return await _from_json(request, user, body.model_dump())
 
 
 @router.get("/files/{file_id}")

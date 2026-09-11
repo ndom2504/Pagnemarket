@@ -3,11 +3,12 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from typing import Optional
+
 import jwt
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from motor.motor_asyncio import AsyncIOMotorClient
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -27,6 +28,7 @@ def _make_db():
         from mongomock_motor import AsyncMongoMockClient
         mongo = AsyncMongoMockClient()
         return mongo, mongo[db_name]
+    from motor.motor_asyncio import AsyncIOMotorClient
     mongo = AsyncIOMotorClient(mongo_url)
     return mongo, mongo[db_name]
 
@@ -78,7 +80,7 @@ def status_entry(status: str) -> dict:
     return {"status": status, "at": datetime.now(timezone.utc)}
 
 
-async def push_order_status(order_filter: dict, status: str, extra: dict | None = None):
+async def push_order_status(order_filter: dict, status: str, extra: Optional[dict] = None):
     """Set order status and append to its statusHistory timeline."""
     update = {"$set": {"status": status, "updatedAt": datetime.now(timezone.utc), **(extra or {})},
               "$push": {"statusHistory": status_entry(status)}}

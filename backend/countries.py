@@ -1,4 +1,5 @@
 """ISO dial codes used to normalize phone numbers."""
+from typing import Optional
 
 DIAL_BY_ISO = {
     "AF": "+93", "ZA": "+27", "AL": "+355", "DZ": "+213", "DE": "+49", "AD": "+376",
@@ -43,11 +44,11 @@ ISO_BY_COUNTRY = {
 }
 
 
-def dial_for_iso(iso: str | None) -> str:
+def dial_for_iso(iso: Optional[str] = None) -> str:
     return DIAL_BY_ISO.get((iso or "GA").upper(), "+241")
 
 
-def iso_for_country(name: str | None) -> str:
+def iso_for_country(name: Optional[str] = None) -> str:
     if not name:
         return "CI"
     return ISO_BY_COUNTRY.get(name.strip().lower(), "CI")

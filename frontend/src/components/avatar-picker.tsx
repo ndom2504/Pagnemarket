@@ -56,7 +56,7 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
   const launch = async (source: Source) => {
     const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: ["images"],
-      quality: 0.7,
+      quality: 0.55,
       allowsEditing: true,
       aspect: [1, 1],
       base64: true,

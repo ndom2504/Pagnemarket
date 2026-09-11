@@ -538,6 +538,16 @@ api_router.include_router(reviews_router.router)
 api_router.include_router(ai_looks_router.router)
 api_router.include_router(otp_auth_router.router)
 app.include_router(api_router)
+# Vercel serves this function at /api and sometimes strips that prefix.
+app.include_router(uploads_router.router)
+
+
+@app.middleware("http")
+async def vercel_api_prefix(request, call_next):
+    path = request.scope.get("path") or ""
+    if path and not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc"):
+        request.scope["path"] = "/api" + (path if path.startswith("/") else f"/{path}")
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,

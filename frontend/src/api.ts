@@ -32,10 +32,16 @@ export async function api<T = any>(
   }
   const res = await fetch(`${BASE_URL}/api${path}`, { ...opts, headers });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
   if (!res.ok) {
-    const msg = (data && (data.detail || data.message)) || `Erreur ${res.status}`;
-    throw new Error(typeof msg === "string" ? msg : "Erreur inconnue");
+    const raw = data && (data.detail || data.message);
+    const msg = typeof raw === "string" ? raw : `Erreur ${res.status}`;
+    throw new Error(msg);
   }
   return data as T;
 }
@@ -77,7 +83,7 @@ export async function uploadImage(asset: {
   const name = asset.fileName || `photo-${Date.now()}.jpg`;
   const type = guessMime(asset);
   const data = asset.base64 || (await readAsBase64(asset.uri));
-  return api<{ id: string; url: string }>("/uploads/image-json", {
+  return api<{ id: string; url: string }>("/uploads/image", {
     method: "POST",
     body: JSON.stringify({ data, contentType: type, fileName: name }),
   });
