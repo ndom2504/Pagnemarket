@@ -1,5 +1,13 @@
-import { EncodingType, getInfoAsync, readAsStringAsync } from "expo-file-system/legacy";
+import {
+  EncodingType,
+  FileSystemSessionType,
+  FileSystemUploadType,
+  getInfoAsync,
+  readAsStringAsync,
+  uploadAsync,
+} from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
+import { Platform } from "react-native";
 
 export const API_BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://pagnemarket.vercel.app")
   .replace(/\/$/, "")
@@ -70,4 +78,27 @@ export async function readImageBase64(uri: string, fallback?: string | null) {
   }
   if (fromFallback) return fromFallback;
   throw new Error("Impossible de lire la photo sur l'appareil.");
+}
+
+export async function uploadAvatarBinary(prepared: PreparedImage, token: string) {
+  const url = `${API_BASE_URL}/api/profile/avatar`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": prepared.mimeType,
+    "X-File-Name": prepared.fileName,
+  };
+
+  if (Platform.OS === "web") {
+    const body = await (await fetch(prepared.uri)).blob();
+    const response = await fetch(url, { method: "POST", headers, body });
+    return { status: response.status, body: await response.text() };
+  }
+
+  const response = await uploadAsync(url, prepared.uri, {
+    httpMethod: "POST",
+    uploadType: FileSystemUploadType.BINARY_CONTENT,
+    sessionType: FileSystemSessionType.FOREGROUND,
+    headers,
+  });
+  return { status: response.status, body: response.body || "" };
 }

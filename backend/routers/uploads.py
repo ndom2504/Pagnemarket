@@ -107,6 +107,19 @@ async def _from_json(request: Request, user: dict, payload: dict):
 save_json_image = _from_json
 
 
+async def save_avatar_bytes(
+    request: Request,
+    user: dict,
+    data: bytes,
+    content_type: str,
+    filename: Optional[str],
+):
+    saved = await _save_image(request, user, data, content_type, filename)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"avatar": saved["url"]}})
+    saved["avatar"] = saved["url"]
+    return saved
+
+
 async def _maybe_avatar(user: dict, saved: dict, as_avatar: bool):
     if as_avatar:
         await db.users.update_one({"id": user["id"]}, {"$set": {"avatar": saved["url"]}})

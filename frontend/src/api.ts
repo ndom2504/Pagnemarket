@@ -1,5 +1,5 @@
 import { storage } from "@/src/utils/storage";
-import { API_BASE_URL, prepareImageUpload, readImageBase64 } from "@/src/media";
+import { API_BASE_URL, prepareImageUpload, readImageBase64, uploadAvatarBinary } from "@/src/media";
 
 const KEY = "pm_token";
 let cachedToken: string | null = null;
@@ -84,6 +84,20 @@ export function formatXAF(n: number): string {
   return `${Math.round(n).toLocaleString("fr-FR")} FCFA`;
 }
 
+function parseUploadResponse(body: string, status: number) {
+  let result: any = null;
+  try {
+    result = body ? JSON.parse(body) : null;
+  } catch {
+    result = null;
+  }
+  if (status < 200 || status >= 300) {
+    throw new Error(friendlyUploadError(formatApiError(result, status), status));
+  }
+  if (!result?.url) throw new Error("Le serveur n'a pas renvoyé l'adresse de la photo.");
+  return result as { id?: string; url: string; avatar?: string };
+}
+
 export async function uploadImage(
   asset: { uri: string; base64?: string | null },
   opts: { asAvatar?: boolean } = {}
@@ -92,8 +106,13 @@ export async function uploadImage(
   if (!token) throw new Error("Reconnectez-vous pour envoyer une photo.");
 
   const prepared = await prepareImageUpload(asset.uri, asset.base64);
-  const data = await readImageBase64(prepared.uri, prepared.base64 || asset.base64);
   try {
+    if (opts.asAvatar) {
+      const response = await uploadAvatarBinary(prepared, token);
+      return parseUploadResponse(response.body, response.status);
+    }
+
+    const data = await readImageBase64(prepared.uri, prepared.base64 || asset.base64);
     const saved = await api<{ id?: string; url: string; avatar?: string }>("/uploads/image", {
       method: "POST",
       body: JSON.stringify({

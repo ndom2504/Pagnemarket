@@ -12,7 +12,7 @@ from deps import client, db, create_token, current_user, decrement_stock
 from routers import payments as payments_router
 from routers import supplier as supplier_router
 from routers import uploads as uploads_router
-from routers.uploads import save_json_image
+from routers.uploads import save_avatar_bytes, save_json_image
 from routers import reco as reco_router
 from routers import reviews as reviews_router
 from routers import ai_looks as ai_looks_router
@@ -233,6 +233,16 @@ async def me(user: dict = Depends(current_user)):
 
 @api_router.post("/profile/avatar")
 async def set_profile_avatar(request: Request, user: dict = Depends(current_user)):
+    content_type = (request.headers.get("content-type") or "").split(";", 1)[0].lower()
+    if content_type.startswith("image/") or content_type == "application/octet-stream":
+        data = await request.body()
+        return await save_avatar_bytes(
+            request,
+            user,
+            data,
+            "image/jpeg" if content_type == "application/octet-stream" else content_type,
+            request.headers.get("x-file-name") or "avatar.jpg",
+        )
     try:
         payload = await request.json()
     except Exception:  # noqa: BLE001
