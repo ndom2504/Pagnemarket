@@ -3,7 +3,7 @@ import base64
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -121,27 +121,37 @@ def _wants_avatar(request: Request, extra: Optional[dict] = None) -> bool:
     return bool(extra and extra.get("asAvatar"))
 
 
-@router.post("/upload")
-async def upload(
-    request: Request,
-    file: UploadFile = File(...),
-    user: dict = Depends(current_user),
-):
+def _form_file(form) -> Optional[UploadFile]:
+    for key in ("file", "image", "photo", "avatar"):
+        item = form.get(key)
+        if isinstance(item, UploadFile):
+            return item
+    for item in form.values():
+        if isinstance(item, UploadFile):
+            return item
+    return None
+
+
+async def _from_request(request: Request, user: dict):
+    ctype = (request.headers.get("content-type") or "").lower()
+    if "application/json" in ctype or ctype.endswith("+json"):
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        return await _from_json(request, user, payload if isinstance(payload, dict) else {})
+    form = await request.form()
+    file = _form_file(form)
+    if file is None:
+        raise HTTPException(400, "Photo manquante. Réessayez.")
     saved = await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
-    return await _maybe_avatar(user, saved, _wants_avatar(request))
+    return await _maybe_avatar(user, saved, _wants_avatar(request, dict(form)))
 
 
+@router.post("/upload")
 @router.post("/uploads/image")
 async def upload_image(request: Request, user: dict = Depends(current_user)):
-    ctype = (request.headers.get("content-type") or "").lower()
-    if "application/json" in ctype:
-        return await _from_json(request, user, await request.json())
-    form = await request.form()
-    file = form.get("file") or form.get("image") or form.get("photo")
-    if not isinstance(file, UploadFile):
-        raise HTTPException(400, "Fichier image manquant")
-    saved = await _save_image(request, user, await file.read(), file.content_type or "", file.filename)
-    return await _maybe_avatar(user, saved, _wants_avatar(request))
+    return await _from_request(request, user)
 
 
 @router.post("/uploads/image-json")

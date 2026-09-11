@@ -76,6 +76,9 @@ export function friendlyUploadError(raw: string, status?: number) {
     return "Photo trop lourde. Choisissez une image plus légère.";
   }
   if (status === 402) return "Stockage temporairement indisponible. Réessayez plus tard.";
+  if (status === 422 || lower.includes("field required")) {
+    return "La photo n'a pas pu être envoyée. Réessayez.";
+  }
   if (status === 404 || lower === "not found" || lower.includes("not found")) {
     return "L'envoi n'a pas atteint le serveur. Vérifiez le réseau, puis réessayez.";
   }
@@ -109,18 +112,16 @@ export async function uploadImage(asset: { uri: string }, opts: { asAvatar?: boo
   if (!token) throw new Error("Reconnectez-vous pour envoyer une photo.");
 
   const prepared = await prepareImageUpload(asset.uri);
-  const path = opts.asAvatar ? "/api/uploads/image?asAvatar=true" : "/api/uploads/image";
-
   try {
-    const sent = await uploadPreparedFile(prepared, token, path);
-    return parseUploadBody(sent.body, sent.status);
+    return await uploadImageJson(prepared, opts);
   } catch (e: any) {
     const msg = String(e?.message || "");
     if (msg.startsWith("Reconnectez") || msg.startsWith("Photo trop") || msg.startsWith("Stockage")) {
       throw e;
     }
     try {
-      return await uploadImageJson(prepared, opts);
+      const sent = await uploadPreparedFile(prepared, token, "/api/uploads/image");
+      return parseUploadBody(sent.body, sent.status);
     } catch (e2: any) {
       throw new Error(friendlyUploadError(e2?.message || msg));
     }
