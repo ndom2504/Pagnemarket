@@ -1,8 +1,6 @@
 {
   "installCommand": "pip install -r requirements.txt && npm ci --prefix website",
-  "buildCommand": "npm run build --prefix website",
-  "outputDirectory": "website/out",
-  "framework": null,
+  "buildCommand": "npm run build --prefix website && node scripts/sync-website-public.js",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" }
   ],
