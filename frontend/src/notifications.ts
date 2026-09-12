@@ -115,25 +115,32 @@ export async function playOrderRingtone() {
   }
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Audio } = require("expo-av") as typeof import("expo-av");
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      allowsRecordingIOS: false,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
+    const { createAudioPlayer, setAudioModeAsync } = require("expo-audio") as typeof import("expo-audio");
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: false,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+      interruptionModeAndroid: "duckOthers",
+      shouldRouteThroughEarpiece: false,
     });
-    const { sound } = await Audio.Sound.createAsync(
+    const player = createAudioPlayer(
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("../assets/sounds/order-ring.wav"),
-      { shouldPlay: true, volume: 1 },
     );
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (!status.isLoaded) return;
-      if (status.didJustFinish) {
-        sound.unloadAsync().catch(() => {});
+    player.volume = 1;
+    player.play();
+    const releaseLater = () => {
+      try {
+        player.remove();
+      } catch {
+        /* ignore */
       }
+    };
+    player.addListener("playbackStatusUpdate", (status) => {
+      if (status.didJustFinish) releaseLater();
     });
+    setTimeout(releaseLater, 8000);
   } catch {
     /* Expo Go / web / missing asset — vibration already ran */
   }
