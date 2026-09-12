@@ -5,7 +5,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
-import { mediaUrl } from "@/src/media";
+import { cardPreviewUrl, mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 type Props = {
@@ -46,26 +46,36 @@ export function TailorSheet({ visible, productName, garment, onClose }: Props) {
             contentContainerStyle={{ gap: 10, paddingBottom: 8 }}
             showsVerticalScrollIndicator={false}
           >
-            {list.map((c) => (
-              <Pressable
-                key={c.id}
-                testID={`tailor-${c.id}`}
-                style={styles.row}
-                onPress={() => {
-                  onClose();
-                  router.push(`/creator/${c.id}`);
-                }}
-              >
-                <Image source={{ uri: mediaUrl(c.avatar) }} style={styles.avatar} contentFit="cover" />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{c.name}</Text>
-                  <Text style={styles.meta}>
-                    {[c.city, c.country].filter(Boolean).join(", ")} · {c.specialty}
-                  </Text>
-                </View>
-                <Icon name="chevron-right" size={18} color={colors.muted} />
-              </Pressable>
-            ))}
+            {list.map((c) => {
+              const preview = cardPreviewUrl(c.cardImage, c.cover, c.previewImage, c.avatar);
+              return (
+                <Pressable
+                  key={c.id}
+                  testID={`tailor-${c.id}`}
+                  style={styles.row}
+                  onPress={() => {
+                    onClose();
+                    router.push(`/creator/${c.id}`);
+                  }}
+                >
+                  {preview ? (
+                    <Image source={{ uri: preview }} style={styles.thumb} contentFit="cover" />
+                  ) : (
+                    <View style={[styles.thumb, styles.thumbFallback]}>
+                      <Text style={styles.thumbLetter}>{(c.name || "T").charAt(0)}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>{c.name}</Text>
+                    <Text style={styles.meta}>
+                      {[c.city, c.country].filter(Boolean).join(", ")}
+                      {c.specialty ? ` · ${c.specialty}` : ""}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={18} color={colors.muted} />
+                </Pressable>
+              );
+            })}
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -104,6 +114,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   avatar: { width: 48, height: 48, borderRadius: 999, backgroundColor: colors.surfaceSecondary },
+  thumb: { width: 64, height: 64, borderRadius: 12, backgroundColor: colors.surfaceSecondary },
+  thumbFallback: { alignItems: "center", justifyContent: "center", backgroundColor: colors.brandPrimary },
+  thumbLetter: { color: "#FFF", fontWeight: "700", fontSize: 18 },
   name: { fontWeight: "500", color: colors.onSurface, fontSize: 14 },
   meta: { color: colors.muted, fontSize: 12, marginTop: 2 },
 });

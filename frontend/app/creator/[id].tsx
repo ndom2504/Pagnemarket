@@ -17,7 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { Icon } from "@/src/icon";
-import { mediaUrl } from "@/src/media";
+import { cardPreviewUrl, mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 export default function CreatorProfile() {
@@ -78,6 +78,13 @@ export default function CreatorProfile() {
   }
 
   const { creator, models } = q.data as any;
+  const coverUri = cardPreviewUrl(
+    creator.cardImage,
+    creator.cover,
+    creator.previewImage,
+    models?.[0]?.image,
+    creator.avatar,
+  );
 
   return (
     <KeyboardAvoidingView
@@ -86,7 +93,9 @@ export default function CreatorProfile() {
     >
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <View style={{ height: 240, backgroundColor: colors.surfaceInverse }}>
-          <Image source={{ uri: creator.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          {coverUri ? (
+            <Image source={{ uri: coverUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          ) : null}
           <LinearGradient
             colors={["rgba(17,17,17,0.4)", "rgba(17,17,17,0.85)"]}
             style={StyleSheet.absoluteFill}
@@ -99,7 +108,13 @@ export default function CreatorProfile() {
         </View>
 
         <View style={styles.headerBlock}>
-          <Image source={{ uri: mediaUrl(creator.avatar) }} style={styles.avatar} contentFit="cover" />
+          {mediaUrl(creator.avatar) ? (
+            <Image source={{ uri: mediaUrl(creator.avatar) }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, { alignItems: "center", justifyContent: "center", backgroundColor: colors.brandPrimary }]}>
+              <Text style={{ color: "#FFF", fontSize: 36, fontWeight: "700" }}>{(creator.name || "T").charAt(0)}</Text>
+            </View>
+          )}
           <Text style={styles.name}>{creator.name}</Text>
           <Text style={styles.meta}>
             {creator.city}, {creator.country} · {creator.specialty}

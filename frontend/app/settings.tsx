@@ -37,6 +37,7 @@ export default function SettingsScreen() {
   const [shopName, setShopName] = useState(user?.shopName || "");
   const [specialty, setSpecialty] = useState(user?.specialty || "");
   const [avatar, setAvatar] = useState(user?.avatarUrl || user?.avatar || "");
+  const [shopCover, setShopCover] = useState((user as any)?.shopCover || "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
@@ -52,6 +53,20 @@ export default function SettingsScreen() {
       setOk(true);
     } catch (e: any) {
       setErr(e.message || "Impossible d'enregistrer la photo");
+    }
+  };
+
+  const onShopCoverChange = async (imgs: string[]) => {
+    const next = imgs[0] || "";
+    setErr(null);
+    setOk(false);
+    try {
+      await updateProfile({ shopCover: next || null } as any);
+      setShopCover(next);
+      await refresh();
+      setOk(true);
+    } catch (e: any) {
+      setErr(e.message || "Impossible d'enregistrer la photo de boutique");
     }
   };
 
@@ -169,6 +184,13 @@ export default function SettingsScreen() {
               Les clients voient {city ? `${city}, ` : ""}
               {country.name}.
             </Text>
+            <Text style={[styles.section, { marginTop: 8 }]}>Photo de carte boutique</Text>
+            <Text style={styles.hint}>Aperçu affiché sur l’accueil clients (sinon premier tissu).</Text>
+            <PhotoPicker
+              images={shopCover ? [mediaUrl(shopCover)] : []}
+              onChange={onShopCoverChange}
+              max={1}
+            />
           </>
         )}
 
@@ -185,7 +207,7 @@ export default function SettingsScreen() {
             />
             <Text style={styles.hint}>
               Visible par les clients de {city ? `${city}, ` : ""}
-              {country.name}.
+              {country.name}. Photo de carte : espace Tailleur → Profil professionnel.
             </Text>
           </>
         )}

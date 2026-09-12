@@ -37,7 +37,7 @@ export default function Shop() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const params = useLocalSearchParams<{ category?: string }>();
+  const params = useLocalSearchParams<{ category?: string; supplierId?: string; supplierName?: string }>();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string>(params.category || "all");
   const [usage, setUsage] = useState("all");
@@ -45,6 +45,10 @@ export default function Shop() {
   const [country, setCountry] = useState<Country>(ALL_COUNTRIES);
   const [city, setCity] = useState("all");
   const [countryReady, setCountryReady] = useState(false);
+  const [supplierId, setSupplierId] = useState<string | null>(params.supplierId ? String(params.supplierId) : null);
+  const [supplierName, setSupplierName] = useState<string | null>(
+    params.supplierName ? String(params.supplierName) : null,
+  );
 
   useEffect(() => {
     if (countryReady || !user) return;
@@ -59,16 +63,25 @@ export default function Shop() {
     if (params.category) setCat(String(params.category));
   }, [params.category]);
 
+  useEffect(() => {
+    if (params.supplierId) {
+      setSupplierId(String(params.supplierId));
+      setSupplierName(params.supplierName ? String(params.supplierName) : null);
+    }
+  }, [params.supplierId, params.supplierName]);
+
   const countryParam = country.iso === "ALL" ? "all" : country.name;
   const cityParam = country.iso === "ALL" || city === "all" ? "all" : city;
   const categories = useQuery({ queryKey: ["categories"], queryFn: () => api("/categories") });
   const products = useQuery({
-    queryKey: ["products", cat, q, sort, countryParam, cityParam, usage],
+    queryKey: ["products", cat, q, sort, countryParam, cityParam, usage, supplierId],
     queryFn: () =>
       api(
         `/products?category=${cat}&q=${encodeURIComponent(q)}&sort=${
           sort === "recent" ? "" : sort
-        }&country=${encodeURIComponent(countryParam)}&city=${encodeURIComponent(cityParam)}&usage=${encodeURIComponent(usage)}`
+        }&country=${encodeURIComponent(countryParam)}&city=${encodeURIComponent(cityParam)}&usage=${encodeURIComponent(usage)}${
+          supplierId ? `&supplierId=${encodeURIComponent(supplierId)}` : ""
+        }`
       ),
   });
 
@@ -82,6 +95,22 @@ export default function Shop() {
       {/* Sticky header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.title}>Boutique</Text>
+        {supplierId ? (
+          <View style={styles.supplierFilter}>
+            <Text style={styles.supplierFilterTxt} numberOfLines={1}>
+              Boutique · {supplierName || "Fournisseur"}
+            </Text>
+            <Pressable
+              onPress={() => {
+                setSupplierId(null);
+                setSupplierName(null);
+              }}
+              hitSlop={8}
+            >
+              <Icon name="x" size={16} color={colors.onSurface} />
+            </Pressable>
+          </View>
+        ) : null}
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
             <Icon name="search" size={16} color={colors.muted} />
@@ -262,6 +291,19 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.divider,
   },
   title: { fontSize: 28, fontWeight: "500", color: colors.onSurface, marginBottom: 12, letterSpacing: -0.5 },
+  supplierFilter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  supplierFilterTxt: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.onSurface },
   searchRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   searchBox: {
     flex: 1,

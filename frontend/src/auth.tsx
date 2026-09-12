@@ -14,6 +14,7 @@ export type User = {
   avatarUrl?: string | null;
   shopName?: string;
   specialty?: string | null;
+  shopCover?: string | null;
 };
 
 type Ctx = {

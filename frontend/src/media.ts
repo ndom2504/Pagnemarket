@@ -15,6 +15,15 @@ export function mediaUrl(url?: string | null) {
   return `${API_BASE_URL}${path.startsWith("/api") ? path : `/api${path}`}`;
 }
 
+/** Best preview image for a tailor/supplier card (cover → craft/product → avatar). */
+export function cardPreviewUrl(...candidates: Array<string | null | undefined>) {
+  for (const c of candidates) {
+    const u = mediaUrl(c);
+    if (u) return u;
+  }
+  return "";
+}
+
 function stripDataUrl(raw: string) {
   const s = String(raw || "").trim();
   if (s.includes(",") && s.toLowerCase().startsWith("data:")) return s.split(",", 1)[1];

@@ -235,6 +235,7 @@ def user_public(u: dict) -> dict:
         "avatarUrl": u.get("avatar") or u.get("avatarUrl"),
         "shopName": u.get("shopName"),
         "specialty": u.get("specialty"),
+        "shopCover": u.get("shopCover"),
         "createdAt": created,
     }
 
@@ -297,6 +298,7 @@ class UserUpdate(BaseModel):
     avatarUrl: Optional[str] = None
     avatarBase64: Optional[str] = None
     photo: Optional[str] = None
+    shopCover: Optional[str] = None
 
 
 @api_router.get("/auth/me")
@@ -387,6 +389,8 @@ async def update_me(request: Request, body: UserUpdate, user: dict = Depends(cur
         patch["specialty"] = str(patch["specialty"]).strip() or None
     if "avatar" in patch and patch["avatar"] is not None:
         patch["avatar"] = str(patch["avatar"]).strip() or None
+    if "shopCover" in patch and patch["shopCover"] is not None:
+        patch["shopCover"] = str(patch["shopCover"]).strip() or None
     if "supplier" in user.get("roles", []) and "city" in patch and not str(patch.get("city") or "").strip():
         raise HTTPException(400, "Indiquez la ville de votre boutique")
     if "tailor" in user.get("roles", []) and "city" in patch and not str(patch.get("city") or "").strip():
@@ -401,6 +405,8 @@ async def update_me(request: Request, body: UserUpdate, user: dict = Depends(cur
         for src, dst in (("city", "city"), ("country", "country"), ("specialty", "specialty"), ("avatar", "avatar")):
             if src in patch:
                 creator_patch[dst] = patch[src]
+        if "shopCover" in patch:
+            creator_patch["cover"] = patch["shopCover"]
         if creator_patch:
             await db.creators.update_one(
                 {"$or": [{"userId": user["id"]}, {"id": user["id"]}]},
@@ -507,10 +513,13 @@ async def list_products(
     country: Optional[str] = None,
     city: Optional[str] = None,
     usage: Optional[str] = None,
+    supplierId: Optional[str] = None,
 ):
     filters: list = []
     if category and category != "all":
         filters.append({"category": category})
+    if supplierId:
+        filters.append({"supplierId": supplierId})
     if q:
         filters.append({
             "$or": [
@@ -560,15 +569,82 @@ async def list_creators(country: Optional[str] = None):
     items = await db.creators.find(query, {"_id": 0}).to_list(100)
     if not items and query:
         items = await db.creators.find({}, {"_id": 0}).to_list(100)
-    return items
+    return [await _enrich_creator_card(c) for c in items]
+
 
 @api_router.get("/creators/{cid}")
 async def get_creator(cid: str):
     c = await db.creators.find_one({"id": cid}, {"_id": 0})
     if not c:
+        c = await db.creators.find_one({"userId": cid}, {"_id": 0})
+    if not c:
         raise HTTPException(404, "Créateur introuvable")
-    models = await db.models.find({"creatorId": cid}, {"_id": 0}).to_list(50)
+    models = await db.models.find({"creatorId": c["id"]}, {"_id": 0}).to_list(50)
+    c = await _enrich_creator_card(c, models=models)
     return {"creator": c, "models": models}
+
+
+async def _enrich_creator_card(creator: dict, models: Optional[list] = None) -> dict:
+    """Attach cardImage for buyer cards: cover → first creation → avatar."""
+    out = dict(creator)
+    uid = out.get("userId") or out.get("id")
+    if not out.get("avatar") and uid:
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "avatar": 1, "avatarUrl": 1})
+        if user:
+            out["avatar"] = user.get("avatar") or user.get("avatarUrl")
+    preview = out.get("cover")
+    if not preview:
+        if models is None:
+            models = await db.models.find(
+                {"creatorId": out.get("id")},
+                {"_id": 0, "image": 1, "images": 1},
+            ).sort("createdAt", -1).to_list(1)
+        if models:
+            m = models[0]
+            preview = m.get("image") or ((m.get("images") or [None])[0])
+    if not preview:
+        preview = out.get("avatar")
+    out["cardImage"] = preview
+    out["previewImage"] = preview
+    return out
+
+
+@api_router.get("/suppliers")
+async def list_suppliers(country: Optional[str] = None):
+    """Public supplier cards for the home / boutique discovery."""
+    users = await db.users.find({}, {"_id": 0}).to_list(800)
+    suppliers = [u for u in users if "supplier" in (u.get("roles") or [])]
+    if country:
+        filtered = [u for u in suppliers if (u.get("country") or "").strip().lower() == country.strip().lower()]
+        if filtered:
+            suppliers = filtered
+    cards = []
+    for u in suppliers[:60]:
+        products = await db.products.find(
+            {"supplierId": u["id"]},
+            {"_id": 0, "images": 1, "name": 1},
+        ).sort("createdAt", -1).to_list(1)
+        product_img = None
+        if products:
+            imgs = products[0].get("images") or []
+            product_img = imgs[0] if imgs else None
+        avatar = u.get("avatar") or u.get("avatarUrl")
+        cover = u.get("shopCover")
+        card_image = cover or product_img or avatar
+        cards.append({
+            "id": u["id"],
+            "shopName": u.get("shopName") or f"{u.get('firstName', '')} {u.get('lastName', '')}".strip() or "Boutique",
+            "city": u.get("city"),
+            "country": u.get("country"),
+            "avatar": avatar,
+            "shopCover": cover,
+            "cardImage": card_image,
+            "previewImage": card_image,
+            "productsCount": await db.products.count_documents({"supplierId": u["id"]}),
+        })
+    cards = [c for c in cards if c.get("productsCount", 0) > 0 or c.get("cardImage")]
+    return cards
+
 
 @api_router.get("/models")
 async def list_models(category: Optional[str] = None):

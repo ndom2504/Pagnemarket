@@ -18,7 +18,7 @@ import { Icon } from "@/src/icon";
 import { categoryImageSource } from "@/src/category-images";
 import { HeroCategoryBackdrop } from "@/src/components/hero-category-backdrop";
 import { NotificationBell } from "@/src/components/notification-bell";
-import { mediaUrl } from "@/src/media";
+import { mediaUrl, cardPreviewUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 export default function Home() {
@@ -42,6 +42,15 @@ export default function Home() {
         user?.country
           ? `/creators?country=${encodeURIComponent(user.country)}`
           : "/creators"
+      ),
+  });
+  const suppliers = useQuery({
+    queryKey: ["suppliers", user?.country],
+    queryFn: () =>
+      api(
+        user?.country
+          ? `/suppliers?country=${encodeURIComponent(user.country)}`
+          : "/suppliers"
       ),
   });
   const models = useQuery({ queryKey: ["models"], queryFn: () => api("/models") });
@@ -253,26 +262,95 @@ export default function Home() {
         keyExtractor={(i: any) => i.id}
         contentContainerStyle={styles.chipsRow}
         showsHorizontalScrollIndicator={false}
-        renderItem={({ item }: any) => (
-          <Pressable
-            testID={`creator-${item.id}`}
-            style={styles.creatorCard}
-            onPress={() => router.push(`/creator/${item.id}`)}
-          >
-            <Image source={{ uri: item.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            <LinearGradient
-              colors={["transparent", "rgba(17,17,17,0.9)"]}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.creatorInfo}>
-              <Image source={{ uri: mediaUrl(item.avatar) }} style={styles.creatorAvatar} contentFit="cover" />
-              <Text style={styles.creatorName}>{item.name}</Text>
-              <Text style={styles.creatorMeta}>
-                {[item.city, item.country].filter(Boolean).join(", ")} · {item.specialty}
-              </Text>
-            </View>
-          </Pressable>
-        )}
+        renderItem={({ item }: any) => {
+          const preview = cardPreviewUrl(item.cardImage, item.cover, item.previewImage, item.avatar);
+          const avatar = mediaUrl(item.avatar);
+          return (
+            <Pressable
+              testID={`creator-${item.id}`}
+              style={styles.creatorCard}
+              onPress={() => router.push(`/creator/${item.id}`)}
+            >
+              {preview ? (
+                <Image source={{ uri: preview }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, styles.cardFallback]} />
+              )}
+              <LinearGradient
+                colors={["transparent", "rgba(17,17,17,0.92)"]}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.creatorInfo}>
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={styles.creatorAvatar} contentFit="cover" />
+                ) : (
+                  <View style={[styles.creatorAvatar, styles.avatarLetter]}>
+                    <Text style={styles.avatarLetterTxt}>{(item.name || "T").charAt(0)}</Text>
+                  </View>
+                )}
+                <Text style={styles.creatorName}>{item.name}</Text>
+                <Text style={styles.creatorMeta}>
+                  {[item.city, item.country].filter(Boolean).join(", ")}
+                  {item.specialty ? ` · ${item.specialty}` : ""}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        }}
+      />
+      </>
+      )}
+
+      {/* Suppliers */}
+      {!!(suppliers.data as any[])?.length && (
+      <>
+      <SectionTitle title="Fournisseurs" subtitle="Découvrez leurs tissus et leur boutique." action="Boutique" onAction={() => router.push("/(tabs)/shop")} />
+      <FlatList
+        horizontal
+        data={suppliers.data || []}
+        keyExtractor={(i: any) => i.id}
+        contentContainerStyle={styles.chipsRow}
+        showsHorizontalScrollIndicator={false}
+        renderItem={({ item }: any) => {
+          const preview = cardPreviewUrl(item.cardImage, item.shopCover, item.previewImage, item.avatar);
+          const avatar = mediaUrl(item.avatar);
+          return (
+            <Pressable
+              testID={`supplier-${item.id}`}
+              style={styles.creatorCard}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/shop",
+                  params: { supplierId: item.id, supplierName: item.shopName },
+                } as any)
+              }
+            >
+              {preview ? (
+                <Image source={{ uri: preview }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, styles.cardFallback]} />
+              )}
+              <LinearGradient
+                colors={["transparent", "rgba(17,17,17,0.92)"]}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.creatorInfo}>
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={styles.creatorAvatar} contentFit="cover" />
+                ) : (
+                  <View style={[styles.creatorAvatar, styles.avatarLetter]}>
+                    <Text style={styles.avatarLetterTxt}>{(item.shopName || "F").charAt(0)}</Text>
+                  </View>
+                )}
+                <Text style={styles.creatorName}>{item.shopName}</Text>
+                <Text style={styles.creatorMeta}>
+                  {[item.city, item.country].filter(Boolean).join(", ")}
+                  {item.productsCount ? ` · ${item.productsCount} tissus` : ""}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        }}
       />
       </>
       )}
@@ -469,7 +547,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     justifyContent: "flex-end",
+    backgroundColor: colors.surfaceInverse,
   },
+  cardFallback: { backgroundColor: "#2A2A2A" },
   creatorInfo: { padding: 12 },
   creatorAvatar: {
     width: 44,
@@ -479,6 +559,12 @@ const styles = StyleSheet.create({
     borderColor: colors.onSurfaceInverse,
     marginBottom: 8,
   },
+  avatarLetter: {
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarLetterTxt: { color: colors.onBrandPrimary, fontWeight: "700", fontSize: 16 },
   creatorName: { color: colors.onSurfaceInverse, fontSize: 15, fontWeight: "500" },
   creatorMeta: { color: colors.onSurfaceInverse, opacity: 0.8, fontSize: 12, marginTop: 2 },
   modelsGrid: {

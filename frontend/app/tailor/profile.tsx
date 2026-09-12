@@ -16,8 +16,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { PhotoPicker } from "@/src/components/photo-picker";
 import { Icon } from "@/src/icon";
-import { mediaUrl } from "@/src/media";
+import { cardPreviewUrl, mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 export default function TailorProfile() {
@@ -30,6 +31,7 @@ export default function TailorProfile() {
   const [bio, setBio] = useState("");
   const [specialty, setSpecialty] = useState("");
   const [years, setYears] = useState("");
+  const [cover, setCover] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function TailorProfile() {
     setBio(c.bio || "");
     setSpecialty(c.specialty || user?.specialty || "");
     setYears(c.yearsExperience != null ? String(c.yearsExperience) : "");
+    setCover(c.cover || "");
   }, [profile.data, user?.specialty]);
 
   const save = useMutation({
@@ -48,20 +51,34 @@ export default function TailorProfile() {
           bio: bio.trim() || null,
           specialty: specialty.trim() || null,
           yearsExperience: years ? Number(years) : null,
+          cover: cover || null,
         }),
       }),
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ["tailor-profile"] });
       qc.invalidateQueries({ queryKey: ["tailor-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["creators"] });
       await refresh?.();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     },
   });
 
+  const onCoverChange = async (imgs: string[]) => {
+    const next = imgs[0] || "";
+    setCover(next);
+    await api("/tailor/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ cover: next || null }),
+    });
+    qc.invalidateQueries({ queryKey: ["tailor-profile"] });
+    qc.invalidateQueries({ queryKey: ["creators"] });
+  };
+
   const creator: any = (profile.data as any)?.creator || {};
   const avatar = user?.avatarUrl || user?.avatar || creator.avatar;
   const name = creator.name || `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+  const preview = cardPreviewUrl(cover, creator.cover, creator.cardImage, avatar);
 
   return (
     <KeyboardAvoidingView
@@ -81,12 +98,20 @@ export default function TailorProfile() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
-            <View style={styles.avatarWrap}>
-              {avatar ? (
-                <Image source={{ uri: mediaUrl(avatar) }} style={styles.avatar} contentFit="cover" />
+            <View style={styles.coverPreview}>
+              {preview ? (
+                <Image source={{ uri: preview }} style={StyleSheet.absoluteFill} contentFit="cover" />
               ) : (
-                <Text style={styles.letter}>{(name || "T").charAt(0)}</Text>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: "#2A2A2A" }]} />
               )}
+              <View style={styles.coverShade} />
+              <View style={styles.avatarWrap}>
+                {avatar ? (
+                  <Image source={{ uri: mediaUrl(avatar) }} style={styles.avatar} contentFit="cover" />
+                ) : (
+                  <Text style={styles.letter}>{(name || "T").charAt(0)}</Text>
+                )}
+              </View>
             </View>
             <Text style={styles.name}>{name}</Text>
             <Text style={styles.meta}>
@@ -105,6 +130,13 @@ export default function TailorProfile() {
               <Text style={styles.shopTxt}>Voir ma boutique</Text>
             </Pressable>
           </View>
+
+          <Field label="Photo de carte (aperçu client)">
+            <Text style={styles.hint}>
+              Affichée sur l’accueil : couverture de votre atelier ou première création.
+            </Text>
+            <PhotoPicker images={cover ? [mediaUrl(cover)] : []} onChange={onCoverChange} max={1} />
+          </Field>
 
           <Field label="Spécialité">
             <TextInput
@@ -180,23 +212,40 @@ const styles = StyleSheet.create({
   hero: {
     backgroundColor: "#FFF",
     borderRadius: 18,
-    padding: 20,
+    padding: 16,
     alignItems: "center",
     gap: 6,
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: "hidden",
+  },
+  coverPreview: {
+    width: "100%",
+    height: 140,
+    borderRadius: 14,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    marginBottom: 8,
+  },
+  coverShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
   avatarWrap: {
-    width: 80,
-    height: 80,
+    width: 72,
+    height: 72,
     borderRadius: 999,
     backgroundColor: colors.surfaceInverse,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    marginBottom: 6,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: "#FFF",
+    zIndex: 1,
   },
-  avatar: { width: 80, height: 80 },
+  avatar: { width: 72, height: 72 },
   letter: { color: "#FFF", fontSize: 28, fontWeight: "600" },
   name: { fontSize: 20, fontWeight: "700", color: colors.onSurface },
   meta: { fontSize: 13, color: colors.muted },
@@ -221,6 +270,7 @@ const styles = StyleSheet.create({
   },
   shopTxt: { fontWeight: "600", color: colors.brandPrimary, fontSize: 13 },
   label: { fontSize: 13, fontWeight: "600", color: colors.onSurface },
+  hint: { fontSize: 12, color: colors.muted, marginBottom: 4 },
   input: {
     backgroundColor: "#FFF",
     borderWidth: 1,
