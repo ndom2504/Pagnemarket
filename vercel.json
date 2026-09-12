@@ -1,7 +1,24 @@
 {
+  "installCommand": "pip install -r requirements.txt && npm ci --prefix website",
+  "buildCommand": "npm run build --prefix website",
+  "outputDirectory": "website/out",
+  "framework": null,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/(.*)", "destination": "/api" }
+    { "source": "/api/(.*)", "destination": "/api" }
+  ],
+  "redirects": [
+    { "source": "/", "destination": "/fr/", "permanent": false },
+    { "source": "/app", "destination": "/fr/app/", "permanent": false },
+    { "source": "/app/", "destination": "/fr/app/", "permanent": false }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
   ],
   "functions": {
     "api/index.py": {
