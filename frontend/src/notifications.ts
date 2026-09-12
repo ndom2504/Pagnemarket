@@ -1,10 +1,12 @@
 import Constants, { ExecutionEnvironment } from "expo-constants";
-import { Platform } from "react-native";
+import { Platform, Vibration } from "react-native";
 import { storage } from "@/src/utils/storage";
 
 export const MESSAGES_CHANNEL = "messages";
+export const ORDERS_CHANNEL = "orders";
 const PERM_ASKED_KEY = "notifications.permissionAsked";
 const LAST_UNREAD_KEY = "notifications.lastUnreadMessages";
+const LAST_ORDERS_KEY = "notifications.lastUnreadOrders";
 
 /** Expo Go (SDK 53+) crashes if expo-notifications is imported on Android. */
 export const isExpoGo =
@@ -51,6 +53,16 @@ export async function ensureAndroidChannel() {
     enableVibrate: true,
     showBadge: true,
   });
+  await Notifications.setNotificationChannelAsync(ORDERS_CHANNEL, {
+    name: "Commandes PagneMarket",
+    description: "Nouvelles commandes fournisseurs et tailleurs",
+    importance: Notifications.AndroidImportance.MAX,
+    sound: "default",
+    vibrationPattern: [0, 400, 200, 400, 200, 400, 200, 600],
+    lightColor: "#C9A227",
+    enableVibrate: true,
+    showBadge: true,
+  });
 }
 
 export async function getNotificationPermissionStatus(): Promise<string> {
@@ -92,23 +104,67 @@ export async function maybePromptNotificationPermission(): Promise<boolean> {
   return requestNotificationPermission();
 }
 
+/** In-app ringtone (works in Expo Go too) + vibration. */
+export async function playOrderRingtone() {
+  try {
+    if (Platform.OS !== "web") {
+      Vibration.vibrate([0, 400, 180, 400, 180, 400, 180, 500]);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Audio } = require("expo-av") as typeof import("expo-av");
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      allowsRecordingIOS: false,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    });
+    const { sound } = await Audio.Sound.createAsync(
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require("../assets/sounds/order-ring.wav"),
+      { shouldPlay: true, volume: 1 },
+    );
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (!status.isLoaded) return;
+      if (status.didJustFinish) {
+        sound.unloadAsync().catch(() => {});
+      }
+    });
+  } catch {
+    /* Expo Go / web / missing asset — vibration already ran */
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Haptics = require("expo-haptics");
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function presentLocalNotification(opts: {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  channelId?: string;
 }) {
   const Notifications = getNotifications();
   if (!Notifications) return;
   const status = await getNotificationPermissionStatus();
   if (status !== "granted") return;
   await ensureAndroidChannel();
+  const channelId = opts.channelId || MESSAGES_CHANNEL;
   await Notifications.scheduleNotificationAsync({
     content: {
       title: opts.title,
       body: opts.body,
       sound: "default",
       data: opts.data || {},
-      ...(Platform.OS === "android" ? { channelId: MESSAGES_CHANNEL } : {}),
+      ...(Platform.OS === "android" ? { channelId } : {}),
     },
     trigger: null,
   });
@@ -125,6 +181,34 @@ export async function notifyIfUnreadIncreased(unreadMessages: number) {
     title: delta === 1 ? "Nouveau message" : `${delta} nouveaux messages`,
     body: "Ouvrez PagneMarket pour répondre.",
     data: { kind: "message" },
+    channelId: MESSAGES_CHANNEL,
+  });
+}
+
+/** New paid marketplace / sewing orders — banner + ringtone. */
+export async function notifyIfOrdersIncreased(
+  unreadOrders: number,
+  latest?: { title?: string; body?: string; kind?: string; data?: Record<string, unknown> } | null,
+) {
+  const prev = Number((await storage.getItem(LAST_ORDERS_KEY, 0)) || 0);
+  await storage.setItem(LAST_ORDERS_KEY, unreadOrders);
+  if (unreadOrders <= prev) return;
+
+  const title =
+    latest?.title ||
+    (unreadOrders - prev === 1 ? "Nouvelle commande" : `${unreadOrders - prev} nouvelles commandes`);
+  const body = latest?.body || "Ouvrez PagneMarket pour traiter la commande.";
+  const data = {
+    kind: latest?.kind || "order",
+    ...(latest?.data || {}),
+  };
+
+  await playOrderRingtone();
+  await presentLocalNotification({
+    title,
+    body,
+    data,
+    channelId: ORDERS_CHANNEL,
   });
 }
 

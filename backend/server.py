@@ -8,7 +8,16 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
 
-from deps import client, db, create_token, current_user, decrement_stock, ensure_creator_profile
+from deps import (
+    client,
+    db,
+    create_token,
+    current_user,
+    create_inbox_notification,
+    decrement_stock,
+    ensure_creator_profile,
+    notify_suppliers_new_order,
+)
 from routers import payments as payments_router
 from routers import supplier as supplier_router
 from routers import uploads as uploads_router
@@ -664,6 +673,7 @@ async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
     await db.orders.insert_one(order.copy())
     await decrement_stock(order["items"])
     await db.carts.update_one({"userId": user["id"]}, {"$set": {"items": []}})
+    await notify_suppliers_new_order(order)
     order.pop("_id", None)
     return order
 
@@ -690,30 +700,6 @@ def _unread_for(conv: dict, uid: str) -> int:
         return int(unread.get(uid) or 0)
     except (TypeError, ValueError):
         return 0
-
-
-async def create_inbox_notification(
-    user_id: str,
-    *,
-    kind: str,
-    title: str,
-    body: str,
-    data: Optional[dict] = None,
-):
-    payload = data or {}
-    doc = {
-        "id": str(uuid.uuid4()),
-        "userId": user_id,
-        "kind": kind,
-        "title": title,
-        "body": body,
-        "data": payload,
-        "conversationId": payload.get("conversationId"),
-        "read": False,
-        "createdAt": datetime.now(timezone.utc),
-    }
-    await db.notifications.insert_one(doc.copy())
-    return doc
 
 
 @api_router.get("/conversations")
@@ -834,9 +820,20 @@ async def notifications_summary(user: dict = Depends(current_user)):
     convs = await db.conversations.find({"participantIds": user["id"]}, {"_id": 0, "unreadBy": 1}).to_list(500)
     unread_messages = sum(_unread_for(c, user["id"]) for c in convs)
     unread_notifications = await db.notifications.count_documents({"userId": user["id"], "read": False})
+    order_kinds = ["order", "sewing_order"]
+    unread_orders = await db.notifications.count_documents(
+        {"userId": user["id"], "read": False, "kind": {"$in": order_kinds}}
+    )
+    latest_docs = await db.notifications.find(
+        {"userId": user["id"], "read": False, "kind": {"$in": order_kinds}},
+        {"_id": 0, "id": 1, "kind": 1, "title": 1, "body": 1, "data": 1},
+    ).sort("createdAt", -1).to_list(1)
+    latest_order = latest_docs[0] if latest_docs else None
     return {
         "unreadMessages": unread_messages,
         "unreadNotifications": unread_notifications,
+        "unreadOrders": unread_orders,
+        "latestOrder": latest_order,
         # Bell uses inbox count; tab badge uses message unread (avoid double-counting).
         "total": unread_notifications,
     }

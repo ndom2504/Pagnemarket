@@ -6,7 +6,15 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from deps import current_tailor, db, ensure_creator_profile, status_entry
+from deps import (
+    current_tailor,
+    current_user,
+    create_inbox_notification,
+    db,
+    ensure_creator_profile,
+    notify_tailor_new_sewing_order,
+    status_entry,
+)
 
 router = APIRouter()
 
@@ -253,6 +261,79 @@ async def delete_model(mid: str, user: dict = Depends(current_tailor)):
     return {"ok": True}
 
 
+class SewingRequestIn(BaseModel):
+    tailorUserId: Optional[str] = None
+    creatorId: Optional[str] = None
+    modelId: Optional[str] = None
+    title: str = Field(default="Demande de confection", min_length=2, max_length=160)
+    notes: Optional[str] = None
+    price: float = Field(ge=0, default=0)
+
+
+@router.post("/sewing-requests")
+async def create_sewing_request(body: SewingRequestIn, user: dict = Depends(current_user)):
+    """Buyer asks a tailor for a custom sewing order — rings the tailor inbox."""
+    tailor_user_id = body.tailorUserId
+    creator = None
+    if body.creatorId:
+        creator = await db.creators.find_one(
+            {"$or": [{"id": body.creatorId}, {"userId": body.creatorId}]},
+            {"_id": 0},
+        )
+        if creator:
+            tailor_user_id = creator.get("userId") or creator.get("id")
+    if not tailor_user_id and body.tailorUserId:
+        tailor_user_id = body.tailorUserId
+    if not tailor_user_id:
+        raise HTTPException(400, "Tailleur introuvable")
+    tailor = await db.users.find_one({"id": tailor_user_id}, {"_id": 0})
+    if not tailor or ("tailor" not in (tailor.get("roles") or []) and "admin" not in (tailor.get("roles") or [])):
+        # Still allow if creator profile exists (legacy)
+        if not creator:
+            raise HTTPException(404, "Tailleur introuvable")
+    if not creator:
+        creator = await ensure_creator_profile(tailor) if tailor else None
+    client_name = f"{user.get('firstName', '')} {user.get('lastName', '')}".strip() or user.get("email") or "Client"
+    model_name = None
+    if body.modelId:
+        model = await db.models.find_one({"id": body.modelId}, {"_id": 0, "name": 1, "indicativePrice": 1})
+        if model:
+            model_name = model.get("name")
+    title = body.title.strip()
+    if model_name and title == "Demande de confection":
+        title = f"Confection · {model_name}"
+    price = float(body.price or 0)
+    if price <= 0 and body.modelId:
+        model = await db.models.find_one({"id": body.modelId}, {"_id": 0, "indicativePrice": 1})
+        if model:
+            price = float(model.get("indicativePrice") or 0)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tailorId": tailor_user_id,
+        "creatorId": (creator or {}).get("id") or tailor_user_id,
+        "clientId": user["id"],
+        "clientName": client_name,
+        "title": title,
+        "price": price,
+        "currency": "XAF",
+        "dueDate": None,
+        "modelId": body.modelId,
+        "notes": body.notes,
+        "status": "received",
+        "paymentStatus": "pending",
+        "source": "client_request",
+        "statusHistory": [status_entry("received")],
+        "createdAt": _now(),
+        "updatedAt": _now(),
+    }
+    await db.sewing_orders.insert_one(doc.copy())
+    if creator:
+        await db.creators.update_one({"id": creator["id"]}, {"$inc": {"ordersCount": 1}})
+    await notify_tailor_new_sewing_order(doc, tailor_id=tailor_user_id)
+    doc.pop("_id", None)
+    return doc
+
+
 # ---- Sewing orders ----
 
 @router.get("/tailor/orders")
@@ -277,12 +358,21 @@ async def create_sewing_order(body: SewingOrderIn, user: dict = Depends(current_
         "notes": body.notes,
         "status": "received",
         "paymentStatus": "pending",
+        "source": "tailor",
         "statusHistory": [status_entry("received")],
         "createdAt": _now(),
         "updatedAt": _now(),
     }
     await db.sewing_orders.insert_one(doc.copy())
     await db.creators.update_one({"id": creator["id"]}, {"$inc": {"ordersCount": 1}})
+    if body.clientId:
+        await create_inbox_notification(
+            body.clientId,
+            kind="sewing_order",
+            title="Commande couture enregistrée",
+            body=doc.get("title") or "Votre demande a été prise en charge",
+            data={"kind": "sewing_order", "sewingOrderId": doc.get("id"), "href": "/orders"},
+        )
     doc.pop("_id", None)
     return doc
 

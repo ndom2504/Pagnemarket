@@ -94,6 +94,19 @@ export default function NotificationsScreen() {
       router.push(`/conversation/${convId}` as any);
       return;
     }
+    const href = (item.data as any)?.href;
+    if (typeof href === "string" && href) {
+      router.push(href as any);
+      return;
+    }
+    if (item.kind === "order") {
+      router.push("/supplier" as any);
+      return;
+    }
+    if (item.kind === "sewing_order") {
+      router.push("/tailor/orders" as any);
+      return;
+    }
   };
 
   return (
@@ -122,9 +135,9 @@ export default function NotificationsScreen() {
             <Icon name="bell" size={22} color={colors.brandSecondary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.permTitle}>Alertes système limitées</Text>
+            <Text style={styles.permTitle}>Sonnerie commandes active</Text>
             <Text style={styles.permSub}>
-              Sous Expo Go, la sonnerie système n’est pas disponible. La cloche et les badges messages fonctionnent ; pour le son OS, utilisez un development build.
+              Sous Expo Go, la sonnerie in-app (bip + vibration) retentit à chaque nouvelle commande. Les bannières système complètes nécessitent un development build.
             </Text>
           </View>
         </View>

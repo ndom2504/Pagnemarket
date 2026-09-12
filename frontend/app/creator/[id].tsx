@@ -28,6 +28,7 @@ export default function CreatorProfile() {
   const [tab, setTab] = useState<"models" | "bio">("models");
   const [msg, setMsg] = useState("");
   const [sent, setSent] = useState(false);
+  const [orderSent, setOrderSent] = useState(false);
 
   const q = useQuery({ queryKey: ["creator", id], queryFn: () => api(`/creators/${id}`) });
   const send = useMutation({
@@ -46,6 +47,25 @@ export default function CreatorProfile() {
         router.push(`/conversation/${msg.conversationId}`);
       }
       setTimeout(() => setSent(false), 3000);
+    },
+  });
+
+  const requestSew = useMutation({
+    mutationFn: (modelId?: string) =>
+      api("/sewing-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          creatorId: id,
+          tailorUserId: q.data?.creator?.userId || id,
+          modelId: modelId || null,
+          title: "Demande de confection",
+          notes: msg.trim() || null,
+        }),
+      }),
+    onSuccess: () => {
+      setOrderSent(true);
+      setMsg("");
+      setTimeout(() => setOrderSent(false), 4000);
     },
   });
 
@@ -106,6 +126,13 @@ export default function CreatorProfile() {
                   <Text style={styles.cardName} numberOfLines={1}>{m.name}</Text>
                   <Text style={styles.cardCat}>{m.category}</Text>
                   <Text style={styles.cardPrice}>{formatXAF(m.indicativePrice)}</Text>
+                  <Pressable
+                    style={styles.orderMini}
+                    disabled={requestSew.isPending}
+                    onPress={() => requestSew.mutate(m.id)}
+                  >
+                    <Text style={styles.orderMiniTxt}>Commander</Text>
+                  </Pressable>
                 </View>
               </View>
             ))}
@@ -120,7 +147,7 @@ export default function CreatorProfile() {
         <View style={styles.contactCard}>
           <Text style={styles.contactTitle}>Contacter le créateur</Text>
           <Text style={styles.contactSub}>
-            Envoyez un message pour discuter d'une commande sur-mesure.
+            Envoyez un message ou passez une commande de confection (le tailleur est notifié avec sonnerie).
           </Text>
           <TextInput
             testID="chat-input"
@@ -137,21 +164,40 @@ export default function CreatorProfile() {
               Message envoyé ✓
             </Text>
           )}
-          <Pressable
-            testID="send-msg"
-            style={[styles.sendBtn, !msg && { opacity: 0.5 }]}
-            disabled={!msg || send.isPending}
-            onPress={() => send.mutate(msg)}
-          >
-            {send.isPending ? (
-              <ActivityIndicator color={colors.onBrandPrimary} />
-            ) : (
-              <>
-                <Text style={styles.sendText}>Envoyer</Text>
-                <Icon name="send" size={14} color={colors.onBrandPrimary} />
-              </>
-            )}
-          </Pressable>
+          {orderSent && (
+            <Text style={styles.sentBadge} testID="order-toast">
+              Demande de confection envoyée ✓
+            </Text>
+          )}
+          <View style={styles.btnRow}>
+            <Pressable
+              testID="request-sew"
+              style={[styles.orderBtn, requestSew.isPending && { opacity: 0.5 }]}
+              disabled={requestSew.isPending}
+              onPress={() => requestSew.mutate(undefined)}
+            >
+              {requestSew.isPending ? (
+                <ActivityIndicator color={colors.brandPrimary} />
+              ) : (
+                <Text style={styles.orderBtnTxt}>Commander</Text>
+              )}
+            </Pressable>
+            <Pressable
+              testID="send-msg"
+              style={[styles.sendBtn, styles.sendBtnFlex, !msg && { opacity: 0.5 }]}
+              disabled={!msg || send.isPending}
+              onPress={() => send.mutate(msg)}
+            >
+              {send.isPending ? (
+                <ActivityIndicator color={colors.onBrandPrimary} />
+              ) : (
+                <>
+                  <Text style={styles.sendText}>Message</Text>
+                  <Icon name="send" size={14} color={colors.onBrandPrimary} />
+                </>
+              )}
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -230,10 +276,36 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   sentBadge: { color: colors.success, marginTop: 8, fontWeight: "500", fontSize: 13 },
-  sendBtn: {
-    marginTop: 12, backgroundColor: colors.brandPrimary,
-    paddingVertical: 12, borderRadius: 999,
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+  btnRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  orderBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surface,
   },
+  orderBtnTxt: { color: colors.brandPrimary, fontWeight: "600", fontSize: 13 },
+  sendBtn: {
+    backgroundColor: colors.brandPrimary,
+    paddingVertical: 12,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  sendBtnFlex: { flex: 1 },
   sendText: { color: colors.onBrandPrimary, fontWeight: "500", fontSize: 13 },
+  orderMini: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.brandPrimary,
+  },
+  orderMiniTxt: { color: colors.onBrandPrimary, fontSize: 11, fontWeight: "600" },
 });

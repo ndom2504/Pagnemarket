@@ -1,5 +1,6 @@
 """Shared dependencies: database client, JWT auth, current user."""
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -159,3 +160,89 @@ async def decrement_stock(items: list):
     for it in items:
         await db.products.update_one({"id": it["productId"]}, {"$inc": {"stock": -int(it.get("quantity", 1))}})
     await db.products.update_many({"stock": {"$lt": 0}}, {"$set": {"stock": 0}})
+
+
+async def create_inbox_notification(
+    user_id: str,
+    *,
+    kind: str,
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+):
+    """Persist an in-app inbox notification (bell + local ringtone poll)."""
+    if not user_id:
+        return None
+    payload = data or {}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "userId": user_id,
+        "kind": kind,
+        "title": title,
+        "body": body,
+        "data": payload,
+        "conversationId": payload.get("conversationId"),
+        "read": False,
+        "createdAt": datetime.now(timezone.utc),
+    }
+    await db.notifications.insert_one(doc.copy())
+    return doc
+
+
+async def notify_suppliers_new_order(order: dict):
+    """Alert each supplier when a marketplace order is confirmed/paid."""
+    supplier_ids = list(order.get("supplierIds") or [])
+    if not supplier_ids:
+        for it in order.get("items") or []:
+            sid = it.get("supplierId")
+            if sid and sid not in supplier_ids:
+                supplier_ids.append(sid)
+    if not supplier_ids:
+        return
+    total = float(order.get("total") or 0)
+    currency = order.get("currency") or "XAF"
+    buyer = (
+        order.get("customerName")
+        or order.get("buyerName")
+        or (order.get("address") if isinstance(order.get("address"), str) else None)
+        or "Client"
+    )
+    if isinstance(order.get("address"), dict) and order["address"].get("name"):
+        buyer = order["address"]["name"]
+    n_items = sum(int(i.get("quantity") or 1) for i in (order.get("items") or []))
+    body = f"{buyer} · {n_items} article(s) · {int(total)} {currency}"
+    for sid in supplier_ids:
+        await create_inbox_notification(
+            sid,
+            kind="order",
+            title="Nouvelle commande reçue",
+            body=body[:160],
+            data={
+                "kind": "order",
+                "orderId": order.get("id"),
+                "role": "supplier",
+                "href": "/supplier",
+            },
+        )
+
+
+async def notify_tailor_new_sewing_order(order: dict, *, tailor_id: str):
+    """Alert tailor when a sewing / custom order is received."""
+    client = order.get("clientName") or "Client"
+    title_txt = order.get("title") or "Commande sur-mesure"
+    price = float(order.get("price") or 0)
+    body = f"{client} · {title_txt}"
+    if price > 0:
+        body += f" · {int(price)} XAF"
+    await create_inbox_notification(
+        tailor_id,
+        kind="sewing_order",
+        title="Nouvelle commande couture",
+        body=body[:160],
+        data={
+            "kind": "sewing_order",
+            "sewingOrderId": order.get("id"),
+            "role": "tailor",
+            "href": "/tailor/orders",
+        },
+    )

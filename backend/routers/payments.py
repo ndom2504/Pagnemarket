@@ -12,7 +12,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from deps import current_user, db, decrement_stock, public_base_url, push_order_status, status_entry
+from deps import (
+    current_user,
+    db,
+    decrement_stock,
+    notify_suppliers_new_order,
+    public_base_url,
+    push_order_status,
+    status_entry,
+)
 
 logger = logging.getLogger("pagnemarket.payments")
 router = APIRouter()
@@ -157,9 +165,10 @@ async def mark_order_paid(payment: dict, *, provider_payment_id: Optional[str] =
     )
     if res.modified_count:
         await push_order_status({"id": payment["orderId"]}, "confirmed", {"paymentStatus": "paid", "paidAt": now})
-        order = await db.orders.find_one({"id": payment["orderId"]}, {"_id": 0, "items": 1})
+        order = await db.orders.find_one({"id": payment["orderId"]}, {"_id": 0})
         if order:
             await decrement_stock(order.get("items", []))
+            await notify_suppliers_new_order(order)
         await db.carts.update_one({"userId": payment["userId"]}, {"$set": {"items": []}})
 
 
