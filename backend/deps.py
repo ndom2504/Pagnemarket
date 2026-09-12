@@ -120,6 +120,7 @@ async def ensure_creator_profile(user: dict) -> dict:
         "bio": user.get("bio") or "",
         "avatar": user.get("avatar"),
         "cover": None,
+        "verified": bool(user.get("emailVerified") or user.get("phoneVerified")),
     }
     await db.creators.insert_one(doc)
     return doc

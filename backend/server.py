@@ -19,6 +19,7 @@ from routers import ai_looks as ai_looks_router
 from routers import otp_auth as otp_auth_router
 from routers import google_auth as google_auth_router
 from routers import admin as admin_router
+from routers import tailor as tailor_router
 from routers.admin import ensure_admin_user
 from routers.payments import OrderDraft, build_order_from_cart
 from storage import init_storage
@@ -878,6 +879,7 @@ api_router.include_router(ai_looks_router.router)
 api_router.include_router(otp_auth_router.router)
 api_router.include_router(google_auth_router.router)
 api_router.include_router(admin_router.router)
+api_router.include_router(tailor_router.router)
 app.include_router(api_router)
 # Vercel serves this function at /api and sometimes strips that prefix.
 app.include_router(uploads_router.router)
