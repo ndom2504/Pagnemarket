@@ -95,6 +95,8 @@ def user_public_safe(u: dict) -> dict:
         "avatarUrl": u.get("avatar") or u.get("avatarUrl"),
         "shopName": u.get("shopName"),
         "specialty": u.get("specialty"),
+        "accountStatus": u.get("accountStatus") or "active",
+        "verified": bool(u.get("verified")),
         "createdAt": u.get("createdAt"),
     }
 
