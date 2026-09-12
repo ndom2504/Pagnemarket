@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useRef, useState } from "react";
@@ -14,17 +15,17 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { api } from "@/src/api";
+import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { CityPicker } from "@/src/components/city-picker";
 import { CountryPicker } from "@/src/components/country-picker";
 import { countryByName, type Country } from "@/src/countries";
 import { Icon } from "@/src/icon";
+import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
 
 type Operator = "orange" | "mtn" | "moov";
 
-// Operator brand colors (identical in light/dark — third-party brands)
 const OPERATORS: { id: Operator; name: string; short: string; color: string; onColor: string; ussd: string }[] = [
   { id: "orange", name: "Orange Money", short: "OM", color: "#FF7900", onColor: "#FFFFFF", ussd: "#150#" },
   { id: "mtn", name: "MTN Mobile Money", short: "MoMo", color: "#FFCC00", onColor: "#111111", ussd: "*126#" },
@@ -48,6 +49,7 @@ export default function Checkout() {
   const [pending, setPending] = useState<any | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const payingRef = useRef(false);
 
   useEffect(() => {
     if (user?.city) setCity(user.city);
@@ -56,23 +58,22 @@ export default function Checkout() {
   }, [user?.city, user?.country, user?.phone]);
 
   const config = useQuery({ queryKey: ["payments-config"], queryFn: () => api("/payments/config", { auth: false }) });
+  const cart = useQuery({ queryKey: ["cart"], queryFn: () => api("/cart") });
   const isLive = (config.data as any)?.mobileMoneyMode === "live";
+  const stripeEnabled = !!(config.data as any)?.stripeEnabled;
+  const shippingFee = Number((config.data as any)?.shippingFee ?? 2500);
+  const cartItems = ((cart.data as any)?.items || []) as any[];
+  const subtotal = Number((cart.data as any)?.total || 0);
+  const shipping = cartItems.length ? shippingFee : 0;
+  const grandTotal = subtotal + shipping;
 
   const finish = () => {
     qc.invalidateQueries({ queryKey: ["cart"] });
     qc.invalidateQueries({ queryKey: ["orders"] });
     setPending(null);
     setOk(true);
+    payingRef.current = false;
   };
-
-  const place = useMutation({
-    mutationFn: () =>
-      api("/orders", {
-        method: "POST",
-        body: JSON.stringify({ address, city, country, phone, paymentMethod: "card" }),
-      }),
-    onSuccess: finish,
-  });
 
   const momo = useMutation({
     mutationFn: () =>
@@ -87,13 +88,39 @@ export default function Checkout() {
         try {
           await WebBrowser.openBrowserAsync(r.paymentUrl);
         } catch {
-          /* user closed the browser — polling continues */
+          /* user closed */
         }
       }
+      payingRef.current = false;
+    },
+    onError: () => {
+      payingRef.current = false;
     },
   });
 
-  // Poll payment status while pending
+  const stripePay = useMutation({
+    mutationFn: () =>
+      api("/payments/stripe/checkout", {
+        method: "POST",
+        body: JSON.stringify({ address, city, country, phone }),
+      }),
+    onSuccess: async (r: any) => {
+      setPayError(null);
+      setPending({ ...r, kind: "stripe" });
+      if (r.paymentUrl) {
+        try {
+          await WebBrowser.openBrowserAsync(r.paymentUrl);
+        } catch {
+          /* user closed */
+        }
+      }
+      payingRef.current = false;
+    },
+    onError: () => {
+      payingRef.current = false;
+    },
+  });
+
   useEffect(() => {
     if (!pending) return;
     let ticks = 0;
@@ -101,20 +128,24 @@ export default function Checkout() {
       ticks += 1;
       try {
         const s: any = await api(`/payments/${pending.transactionId}/status`);
-        if (s.status === "PAID") {
+        if (s.status === "PAID" || s.status === "SUCCEEDED") {
           clearInterval(pollRef.current!);
           finish();
-        } else if (s.status === "FAILED") {
+        } else if (s.status === "FAILED" || s.status === "REFUNDED") {
           clearInterval(pollRef.current!);
           setPending(null);
-          setPayError("Paiement refusé par l'opérateur. Vérifiez votre solde et réessayez.");
+          setPayError(
+            pending.kind === "stripe"
+              ? "Paiement carte refusé ou annulé. Vous pouvez réessayer."
+              : "Paiement refusé par l'opérateur. Vérifiez votre solde et réessayez."
+          );
         } else if (ticks > 100) {
           clearInterval(pollRef.current!);
           setPending(null);
-          setPayError("Délai dépassé. Si vous avez validé le paiement, il apparaîtra dans vos commandes.");
+          setPayError("Délai dépassé. Si vous avez payé, la commande apparaîtra dans Mes commandes.");
         }
       } catch {
-        /* transient network error, keep polling */
+        /* keep polling */
       }
     }, 3000);
     return () => {
@@ -124,8 +155,22 @@ export default function Checkout() {
   }, [pending?.transactionId]);
 
   const op = OPERATORS.find((o) => o.id === operator)!;
-  const canPay = !!address && !!city && !!country && !!phone && (method === "card" || (momoPhone || phone).length >= 8);
-  const busy = place.isPending || momo.isPending;
+  const canPay =
+    !!address &&
+    !!city &&
+    !!country &&
+    !!phone &&
+    cartItems.length > 0 &&
+    (method === "card" ? stripeEnabled : (momoPhone || phone).length >= 8);
+  const busy = momo.isPending || stripePay.isPending;
+
+  const onPay = () => {
+    if (payingRef.current || busy || !canPay) return;
+    payingRef.current = true;
+    setPayError(null);
+    if (method === "mobile") momo.mutate();
+    else stripePay.mutate();
+  };
 
   if (ok) {
     return (
@@ -135,39 +180,52 @@ export default function Checkout() {
         </View>
         <Text style={styles.doneTitle}>Merci pour votre commande !</Text>
         <Text style={styles.doneSub}>
-          Votre paiement a été confirmé. Le fournisseur prépare votre commande, vous serez informé dès l'expédition.
+          Votre paiement a été confirmé. Le fournisseur prépare votre commande.
         </Text>
-        <Pressable
-          testID="done-back"
-          style={styles.doneCta}
-          onPress={() => router.replace("/(tabs)")}
-        >
-          <Text style={styles.doneCtaText}>Retour à l'accueil</Text>
+        <Pressable testID="done-orders" style={styles.doneCta} onPress={() => router.replace("/orders" as any)}>
+          <Text style={styles.doneCtaText}>Voir mes commandes</Text>
+        </Pressable>
+        <Pressable testID="done-back" style={styles.ghostBtn} onPress={() => router.replace("/(tabs)")}>
+          <Text style={styles.ghostTxt}>Retour à l'accueil</Text>
         </Pressable>
       </View>
     );
   }
 
   if (pending) {
+    const isStripe = pending.kind === "stripe" || pending.mode === "stripe";
     return (
-      <View style={styles.doneWrap} testID="momo-pending">
-        <View style={[styles.opBadgeBig, { backgroundColor: op.color }]}>
-          <Text style={[styles.opBadgeBigTxt, { color: op.onColor }]}>{op.short}</Text>
-        </View>
-        <Text style={styles.doneTitle}>Confirmez sur votre téléphone</Text>
-        <Text style={styles.doneSub}>
-          Une demande de paiement {op.name} de {Math.round(pending.amount).toLocaleString("fr-FR")} {pending.currency} a été envoyée
-          au {momoPhone || phone}. Validez avec votre code secret.
+      <View style={styles.doneWrap} testID="pay-pending">
+        {isStripe ? (
+          <View style={[styles.opBadgeBig, { backgroundColor: colors.surfaceInverse }]}>
+            <Icon name="credit-card" size={32} color={colors.onSurfaceInverse} />
+          </View>
+        ) : (
+          <View style={[styles.opBadgeBig, { backgroundColor: op.color }]}>
+            <Text style={[styles.opBadgeBigTxt, { color: op.onColor }]}>{op.short}</Text>
+          </View>
+        )}
+        <Text style={styles.doneTitle}>
+          {isStripe ? "Finalisez sur Stripe" : "Confirmez sur votre téléphone"}
         </Text>
-        <View style={styles.stepsCard}>
-          <Step n="1" txt={`Ouvrez la notification ${op.name} ou composez ${op.ussd}`} />
-          <Step n="2" txt="Vérifiez le montant et le marchand PagneMarket" />
-          <Step n="3" txt="Saisissez votre code secret pour valider" />
-        </View>
+        <Text style={styles.doneSub}>
+          {isStripe
+            ? `Paiement sécurisé de ${Math.round(pending.amount).toLocaleString("fr-FR")} ${pending.currency}. Ne fermez pas l’app tant que la confirmation n’est pas reçue.`
+            : `Une demande ${op.name} de ${Math.round(pending.amount).toLocaleString("fr-FR")} ${pending.currency} a été envoyée au ${momoPhone || phone}.`}
+        </Text>
+        {!isStripe && (
+          <View style={styles.stepsCard}>
+            <Step n="1" txt={`Ouvrez la notification ${op.name} ou composez ${op.ussd}`} />
+            <Step n="2" txt="Vérifiez le montant et le marchand PagneMarket" />
+            <Step n="3" txt="Saisissez votre code secret pour valider" />
+          </View>
+        )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }}>
           <ActivityIndicator color={colors.brandSecondary} />
           <Text style={{ color: colors.muted, fontSize: 13 }}>
-            {pending.mode === "simulation" ? "Mode démo : confirmation automatique…" : "En attente de confirmation…"}
+            {pending.mode === "simulation"
+              ? "Mode démo : confirmation automatique…"
+              : "En attente de confirmation…"}
           </Text>
         </View>
         {pending.paymentUrl && (
@@ -175,7 +233,7 @@ export default function Checkout() {
             <Text style={styles.linkTxt}>Rouvrir la page de paiement</Text>
           </Pressable>
         )}
-        <Pressable testID="momo-cancel" style={styles.ghostBtn} onPress={() => setPending(null)}>
+        <Pressable testID="pay-cancel" style={styles.ghostBtn} onPress={() => setPending(null)}>
           <Text style={styles.ghostTxt}>Annuler</Text>
         </Pressable>
       </View>
@@ -196,6 +254,58 @@ export default function Checkout() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }}>
+        <View style={styles.brandCard}>
+          <Image
+            source={require("../assets/images/logo.png")}
+            style={styles.logo}
+            contentFit="contain"
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.brandName}>PagneMarket</Text>
+            <Text style={styles.slogan}>Le tissu sans frontières</Text>
+          </View>
+        </View>
+
+        <Text style={styles.section}>Récapitulatif</Text>
+        {cart.isLoading ? (
+          <ActivityIndicator color={colors.brandPrimary} />
+        ) : (
+          <View style={styles.summaryCard}>
+            {cartItems.map((it: any, idx: number) => {
+              const p = it.product || {};
+              return (
+                <View key={(p.id || idx) + "-" + idx} style={styles.summaryRow}>
+                  <Image
+                    source={{ uri: mediaUrl(p.images?.[0]) }}
+                    style={styles.summaryImg}
+                    contentFit="cover"
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.summaryName} numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                    <Text style={styles.summaryMeta}>
+                      ×{it.quantity} · {formatXAF(it.lineTotal)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+            <View style={styles.sumLine}>
+              <Text style={styles.sumLbl}>Sous-total</Text>
+              <Text style={styles.sumVal}>{formatXAF(subtotal)}</Text>
+            </View>
+            <View style={styles.sumLine}>
+              <Text style={styles.sumLbl}>Livraison</Text>
+              <Text style={styles.sumVal}>{formatXAF(shipping)}</Text>
+            </View>
+            <View style={[styles.sumLine, { marginTop: 4 }]}>
+              <Text style={styles.totalLbl}>Total</Text>
+              <Text style={styles.totalVal}>{formatXAF(grandTotal)} XAF</Text>
+            </View>
+          </View>
+        )}
+
         <Text style={styles.section}>Adresse de livraison</Text>
         <TextInput
           testID="input-address"
@@ -213,12 +323,7 @@ export default function Checkout() {
           }}
           testID="input-country"
         />
-        <CityPicker
-          countryIso={countryObj.iso}
-          value={city}
-          onChange={setCity}
-          testID="input-city"
-        />
+        <CityPicker countryIso={countryObj.iso} value={city} onChange={setCity} testID="input-city" />
         <TextInput
           testID="input-phone"
           style={styles.input}
@@ -238,9 +343,7 @@ export default function Checkout() {
           <Icon name="smartphone" size={20} color={colors.onSurface} />
           <View style={{ flex: 1 }}>
             <Text style={styles.payTitle}>Mobile Money</Text>
-            <Text style={styles.paySub}>
-              Orange · MTN · Moov {isLive ? "" : "(mode démo)"}
-            </Text>
+            <Text style={styles.paySub}>Orange · MTN · Moov {isLive ? "" : "(mode démo)"}</Text>
           </View>
           {method === "mobile" && <Icon name="check-circle" size={20} color={colors.brandSecondary} />}
         </Pressable>
@@ -260,7 +363,9 @@ export default function Checkout() {
                     <View style={[styles.opBadge, { backgroundColor: o.color }]}>
                       <Text style={[styles.opBadgeTxt, { color: o.onColor }]}>{o.short}</Text>
                     </View>
-                    <Text numberOfLines={1} style={styles.opName}>{o.name.replace(" Mobile Money", " MoMo")}</Text>
+                    <Text numberOfLines={1} style={styles.opName}>
+                      {o.name.replace(" Mobile Money", " MoMo")}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -268,53 +373,64 @@ export default function Checkout() {
             <TextInput
               testID="input-momo-phone"
               style={styles.input}
-              placeholder={`Numéro ${op.name} (ex : 07 00 00 00)`}
+              placeholder={`Numéro ${op.name}`}
               placeholderTextColor={colors.muted}
               keyboardType="phone-pad"
               value={momoPhone}
               onChangeText={setMomoPhone}
             />
-            <Text style={styles.momoHint}>
-              Vous recevrez une demande de validation sur ce numéro. Laissez vide pour utiliser le téléphone de livraison.
-            </Text>
           </View>
         )}
 
         <Pressable
           testID="pay-card"
-          style={[styles.payCard, method === "card" && styles.payCardActive]}
-          onPress={() => setMethod("card")}
+          style={[
+            styles.payCard,
+            method === "card" && styles.payCardActive,
+            !stripeEnabled && { opacity: 0.55 },
+          ]}
+          onPress={() => stripeEnabled && setMethod("card")}
         >
           <Icon name="credit-card" size={20} color={colors.onSurface} />
           <View style={{ flex: 1 }}>
             <Text style={styles.payTitle}>Carte bancaire</Text>
-            <Text style={styles.paySub}>Visa · Mastercard (Simulation)</Text>
+            <Text style={styles.paySub}>
+              {stripeEnabled ? "Visa · Mastercard via Stripe" : "Stripe non configuré (STRIPE_SECRET_KEY)"}
+            </Text>
           </View>
           {method === "card" && <Icon name="check-circle" size={20} color={colors.brandSecondary} />}
         </Pressable>
 
         <Pressable
           testID="place-order"
-          style={[styles.placeBtn, !canPay && { opacity: 0.5 }]}
+          style={[styles.placeBtn, (!canPay || busy) && { opacity: 0.5 }]}
           disabled={!canPay || busy}
-          onPress={() => (method === "mobile" ? momo.mutate() : place.mutate())}
+          onPress={onPay}
         >
           {busy ? (
             <ActivityIndicator color={colors.onBrandPrimary} />
           ) : (
             <>
               <Text style={styles.placeText}>
-                {method === "mobile" ? `Payer avec ${op.name}` : "Confirmer et payer"}
+                {method === "mobile" ? `Payer avec ${op.name}` : "Payer maintenant"}
               </Text>
               <Icon name="lock" size={16} color={colors.onBrandPrimary} />
             </>
           )}
         </Pressable>
 
-        {(place.isError || momo.isError || payError) && (
-          <Text testID="checkout-error" style={{ color: colors.error, textAlign: "center" }}>
-            {payError || (place.error as any)?.message || (momo.error as any)?.message || "Erreur de paiement"}
-          </Text>
+        {(stripePay.isError || momo.isError || payError) && (
+          <View style={styles.errorBox}>
+            <Text testID="checkout-error" style={{ color: colors.error, textAlign: "center" }}>
+              {payError ||
+                (stripePay.error as any)?.message ||
+                (momo.error as any)?.message ||
+                "Erreur de paiement"}
+            </Text>
+            <Pressable style={styles.retryBtn} onPress={onPay}>
+              <Text style={styles.retryTxt}>Réessayer</Text>
+            </Pressable>
+          </View>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -334,76 +450,189 @@ function Step({ n, txt }: { n: string; txt: string }) {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.divider,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
   },
   iconBtn: {
-    width: 40, height: 40, borderRadius: 999,
+    width: 40,
+    height: 40,
+    borderRadius: 999,
     backgroundColor: colors.surfaceSecondary,
-    alignItems: "center", justifyContent: "center",
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: { fontSize: 18, fontWeight: "500", color: colors.onSurface },
+  brandCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceInverse,
+  },
+  logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: "#000" },
+  brandName: { color: colors.onSurfaceInverse, fontSize: 18, fontWeight: "600", letterSpacing: -0.3 },
+  slogan: { color: colors.brandTertiary, fontSize: 13, marginTop: 2 },
   section: { fontSize: 15, fontWeight: "500", color: colors.onSurface },
+  summaryCard: {
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  summaryRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  summaryImg: { width: 48, height: 56, borderRadius: 8, backgroundColor: colors.surfaceSecondary },
+  summaryName: { fontSize: 13, fontWeight: "500", color: colors.onSurface },
+  summaryMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  sumLine: { flexDirection: "row", justifyContent: "space-between", marginTop: 4 },
+  sumLbl: { color: colors.muted, fontSize: 13 },
+  sumVal: { color: colors.onSurface, fontSize: 13, fontWeight: "500" },
+  totalLbl: { color: colors.onSurface, fontSize: 15, fontWeight: "600" },
+  totalVal: { color: colors.brandSecondary, fontSize: 16, fontWeight: "600" },
   input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: 12,
-    padding: 14, fontSize: 14, color: colors.onSurface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    color: colors.onSurface,
     backgroundColor: colors.surfaceTertiary,
   },
   payCard: {
-    flexDirection: "row", alignItems: "center", gap: 12, padding: 16,
-    borderRadius: 12, borderWidth: 1, borderColor: colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
     backgroundColor: colors.surfaceTertiary,
   },
   payCardActive: { borderColor: colors.brandSecondary, backgroundColor: colors.surfaceSecondary },
   payTitle: { fontSize: 14, fontWeight: "500", color: colors.onSurface },
   paySub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   momoBox: {
-    gap: 12, padding: 14, borderRadius: 12, backgroundColor: colors.surfaceTertiary,
-    borderWidth: 1, borderColor: colors.border, marginTop: -6,
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: -6,
   },
   opRow: { flexDirection: "row", gap: 8 },
   opCard: {
-    flex: 1, alignItems: "center", gap: 8, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 12,
-    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+    flex: 1,
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   opBadge: { width: 44, height: 44, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   opBadgeTxt: { fontWeight: "500", fontSize: 12 },
   opName: { fontSize: 11, color: colors.onSurface, fontWeight: "500" },
-  momoHint: { fontSize: 11, color: colors.muted, lineHeight: 16 },
-  opBadgeBig: { width: 88, height: 88, borderRadius: 999, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  opBadgeBig: {
+    width: 88,
+    height: 88,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
   opBadgeBigTxt: { fontWeight: "500", fontSize: 20 },
   stepsCard: {
-    alignSelf: "stretch", gap: 12, padding: 16, borderRadius: 12, backgroundColor: colors.surfaceTertiary,
-    borderWidth: 1, borderColor: colors.border, marginTop: 8,
+    alignSelf: "stretch",
+    gap: 12,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 8,
   },
   stepRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  stepNum: { width: 24, height: 24, borderRadius: 999, backgroundColor: colors.surfaceInverse, alignItems: "center", justifyContent: "center" },
+  stepNum: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceInverse,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   stepNumTxt: { color: colors.onSurfaceInverse, fontSize: 12, fontWeight: "500" },
   stepTxt: { flex: 1, color: colors.onSurface, fontSize: 13 },
   linkBtn: { padding: 10 },
   linkTxt: { color: colors.brandSecondary, fontWeight: "500", fontSize: 13 },
-  ghostBtn: { marginTop: 4, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 999, borderWidth: 1, borderColor: colors.border },
+  ghostBtn: {
+    marginTop: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   ghostTxt: { color: colors.onSurface, fontWeight: "500", fontSize: 13 },
   placeBtn: {
-    marginTop: 12, backgroundColor: colors.brandPrimary, paddingVertical: 16,
+    marginTop: 12,
+    backgroundColor: colors.brandPrimary,
+    paddingVertical: 16,
     borderRadius: 999,
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
   placeText: { color: colors.onBrandPrimary, fontWeight: "500", fontSize: 15 },
+  errorBox: { gap: 10, alignItems: "center" },
+  retryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  retryTxt: { color: colors.onSurface, fontWeight: "600", fontSize: 13 },
   doneWrap: {
-    flex: 1, backgroundColor: colors.surface, alignItems: "center",
-    justifyContent: "center", padding: 32, gap: 12,
+    flex: 1,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+    gap: 12,
   },
   doneBadge: {
-    width: 88, height: 88, borderRadius: 999, backgroundColor: colors.success,
-    alignItems: "center", justifyContent: "center", marginBottom: 16,
+    width: 88,
+    height: 88,
+    borderRadius: 999,
+    backgroundColor: colors.success,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
-  doneTitle: { fontSize: 22, fontWeight: "500", color: colors.onSurface, textAlign: "center", letterSpacing: -0.5 },
+  doneTitle: {
+    fontSize: 22,
+    fontWeight: "500",
+    color: colors.onSurface,
+    textAlign: "center",
+    letterSpacing: -0.5,
+  },
   doneSub: { color: colors.muted, textAlign: "center", fontSize: 14, lineHeight: 20 },
   doneCta: {
-    marginTop: 20, backgroundColor: colors.brandPrimary,
-    paddingHorizontal: 28, paddingVertical: 14, borderRadius: 999,
+    marginTop: 20,
+    backgroundColor: colors.brandPrimary,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 999,
   },
   doneCtaText: { color: colors.onBrandPrimary, fontWeight: "500", fontSize: 14 },
 });

@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { NotificationBell } from "@/src/components/notification-bell";
 import { Icon } from "@/src/icon";
 import { mediaUrl } from "@/src/media";
 import { PAYMENT_LABEL, SUPPLIER_STATUS_FLOW, statusOf } from "@/src/order-status";
@@ -79,6 +80,7 @@ export default function SupplierDashboard() {
         <Pressable testID="supplier-products-link" style={styles.iconBtn} onPress={() => router.push("/supplier/products")}>
           <Icon name="grid" size={18} color={colors.onSurface} />
         </Pressable>
+        <NotificationBell testID="supplier-home-bell" />
       </View>
 
       {stats.isLoading || !s ? (
@@ -134,6 +136,13 @@ export default function SupplierDashboard() {
             <Text style={styles.heroSub}>
               {s.ordersToday} commande{s.ordersToday > 1 ? "s" : ""} aujourd'hui · CA total {formatXAF(s.revenueTotal)}
             </Text>
+            {typeof s.netRevenue === "number" ? (
+              <Text style={[styles.heroSub, { marginTop: 6, opacity: 0.85 }]}>
+                Brut {formatXAF(s.grossRevenue ?? s.revenueTotal)} · Commission{" "}
+                {Math.round((s.commissionRate || 0.1) * 100)}% {formatXAF(s.platformCommission || 0)} · Net{" "}
+                {formatXAF(s.netRevenue)} · Versement {s.payoutStatus === "manual" ? "manuel" : s.payoutStatus}
+              </Text>
+            ) : null}
           </View>
 
           <View style={styles.kpiRow}>

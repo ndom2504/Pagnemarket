@@ -2,10 +2,14 @@ import { Redirect, Tabs } from "expo-router";
 import { ActivityIndicator, Platform, View } from "react-native";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
+import { useNotificationSummary } from "@/src/hooks/use-notification-summary";
+import { formatBadgeCount } from "@/src/notifications";
 import { colors } from "@/src/theme";
 
 export default function SupplierLayout() {
   const { user, loading } = useAuth();
+  const { unreadMessages } = useNotificationSummary();
+  const badge = formatBadgeCount(unreadMessages);
 
   if (loading) {
     return (
@@ -44,6 +48,13 @@ export default function SupplierLayout() {
         name="messages"
         options={{
           title: "Messages",
+          tabBarBadge: badge,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.brandSecondary,
+            color: colors.onBrandSecondary,
+            fontSize: 10,
+            fontWeight: "700",
+          },
           tabBarIcon: ({ color }) => <Icon name="message-circle" color={color} size={22} />,
         }}
       />

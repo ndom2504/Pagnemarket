@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "PagneMarket",
+    "slug": "pagnemarket",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "pagnemarket",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -21,7 +21,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.emergent.tissuehub.gpxlrs",
-      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES", "POST_NOTIFICATIONS", "VIBRATE"]
     },
     "web": {
       "bundler": "metro",
@@ -39,6 +39,7 @@
           "backgroundColor": "#000000"
         }
       ],
+      "expo-video",
       "expo-font",
       "expo-image",
       "expo-secure-store",
@@ -49,6 +50,15 @@
         {
           "photosPermission": "Choisissez une photo de profil ou des tissus",
           "cameraPermission": "Photographiez votre profil ou vos tissus"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#B85C38",
+          "defaultChannel": "messages",
+          "sounds": []
         }
       ],
       "@react-native-vector-icons/feather"

@@ -18,6 +18,10 @@ import { useAuth } from "@/src/auth";
 import { CityPicker } from "@/src/components/city-picker";
 import { CountryPicker } from "@/src/components/country-picker";
 import { DEFAULT_COUNTRY, formatPhone, type Country } from "@/src/countries";
+import {
+  isGoogleAuthConfigured,
+  promptGoogleIdToken,
+} from "@/src/google-auth";
 import { homeForRoles } from "@/src/home-route";
 import { colors } from "@/src/theme";
 import { Icon } from "@/src/icon";
@@ -30,7 +34,8 @@ const HERO =
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signIn, signUp, sendOtp, verifyOtp } = useAuth();
+  const { signIn, signUp, signInWithGoogle, sendOtp, verifyOtp } = useAuth();
+  const googleReady = isGoogleAuthConfigured();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [method, setMethod] = useState<"otp" | "email">("otp");
   const [step, setStep] = useState<"form" | "code">("form");
@@ -52,12 +57,24 @@ export default function AuthScreen() {
     router.replace(homeForRoles(roles?.length ? roles : [role]));
   };
 
-  const requireRegisterLocation = () => {
+  const googleExtra = () => {
+    if (mode !== "register") return {};
+    return {
+      role,
+      city: city.trim() || undefined,
+      country: country.name,
+      shopName: role === "supplier" && shopName.trim() ? shopName.trim() : undefined,
+      specialty: role === "tailor" && specialty.trim() ? specialty.trim() : undefined,
+    };
+  };
+
+  const requireRegisterLocation = (opts?: { skipNames?: boolean }) => {
     if (mode !== "register") return true;
-    if (!firstName.trim() || !lastName.trim()) {
+    if (!opts?.skipNames && (!firstName.trim() || !lastName.trim())) {
       setErr("Indiquez votre prénom et votre nom");
       return false;
     }
+    if (role === "buyer" && opts?.skipNames) return true;
     if (!city.trim()) {
       setErr(
         role === "supplier"
@@ -73,6 +90,29 @@ export default function AuthScreen() {
       return false;
     }
     return true;
+  };
+
+  const onGoogle = async () => {
+    setErr(null);
+    if (!googleReady) {
+      setErr("Google Auth non configuré (EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID)");
+      return;
+    }
+    if (mode === "register" && !requireRegisterLocation({ skipNames: true })) return;
+    setLoading(true);
+    try {
+      const token = await promptGoogleIdToken(googleExtra());
+      if (!token) {
+        setErr("Connexion Google annulée");
+        return;
+      }
+      const u = await signInWithGoogle(token, googleExtra());
+      goHome(u.roles);
+    } catch (e: any) {
+      setErr(e.message || "Connexion Google impossible");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onSendOtp = async () => {
@@ -377,6 +417,28 @@ export default function AuthScreen() {
           )}
 
           <Pressable
+            testID="auth-google"
+            style={[styles.googleBtn, (!googleReady || loading) && { opacity: 0.55 }]}
+            onPress={onGoogle}
+            disabled={loading || !googleReady}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.onSurface} />
+            ) : (
+              <>
+                <Text style={styles.googleG}>G</Text>
+                <Text style={styles.googleText}>Continuer avec Google</Text>
+              </>
+            )}
+          </Pressable>
+
+          <View style={styles.orRow}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>ou</Text>
+            <View style={styles.orLine} />
+          </View>
+
+          <Pressable
             testID="auth-submit"
             style={styles.cta}
             onPress={onSubmit}
@@ -511,6 +573,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
   },
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceTertiary,
+    marginBottom: 4,
+  },
+  googleG: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#4285F4",
+    width: 22,
+    textAlign: "center",
+  },
+  googleText: { color: colors.onSurface, fontWeight: "600", fontSize: 15 },
+  orRow: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 12 },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  orText: { color: colors.muted, fontSize: 12 },
   cta: {
     backgroundColor: colors.brandPrimary,
     paddingVertical: 16,

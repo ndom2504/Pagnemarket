@@ -16,11 +16,10 @@ import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
 import { categoryImageSource } from "@/src/category-images";
+import { HeroCategoryBackdrop } from "@/src/components/hero-category-backdrop";
+import { NotificationBell } from "@/src/components/notification-bell";
 import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
-
-const HERO_IMG =
-  "https://images.unsplash.com/photo-1768212566108-4ce4f329e4d2?w=1200&q=80";
 
 export default function Home() {
   const insets = useSafeAreaInsets();
@@ -63,25 +62,35 @@ export default function Home() {
     >
       {/* Hero */}
       <View style={styles.hero}>
-        <Image source={{ uri: HERO_IMG }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <HeroCategoryBackdrop />
         <LinearGradient
-          colors={["rgba(17,17,17,0.1)", "rgba(17,17,17,0.8)"]}
+          colors={["rgba(17,17,17,0.35)", "rgba(17,17,17,0.55)", "rgba(17,17,17,0.88)"]}
           style={StyleSheet.absoluteFill}
         />
         <View style={[styles.heroTop, { paddingTop: insets.top + 12 }]}>
-          <Text style={styles.brand}>PagneMarket</Text>
-          <Pressable
-            testID="header-search"
-            onPress={() => router.push("/(tabs)/shop")}
-            style={styles.iconBtn}
-          >
-            <Icon name="search" color={colors.onSurfaceInverse} size={20} />
-          </Pressable>
+          <View style={styles.brandRow}>
+            <Image
+              source={require("../../assets/images/logo.png")}
+              style={styles.brandLogo}
+              contentFit="contain"
+            />
+            <Text style={styles.brand}>PagneMarket</Text>
+          </View>
+          <View style={styles.heroActions}>
+            {user ? <NotificationBell light testID="home-notif-bell" /> : null}
+            <Pressable
+              testID="header-search"
+              onPress={() => router.push("/(tabs)/shop")}
+              style={styles.iconBtn}
+            >
+              <Icon name="search" color={colors.onSurfaceInverse} size={20} />
+            </Pressable>
+          </View>
         </View>
         <View style={styles.heroBottom}>
-          <Text style={styles.heroTitle}>Le pagne africain,{"\n"}autrement.</Text>
+          <Text style={styles.heroTitle}>Le pagne africain{"\n"}partout dans le monde.</Text>
           <Text style={styles.heroSub}>
-            Vous choisissez le tissu. Un tailleur le coud. L’IA imagine la tenue.
+            Vous choisissez un motif de tissu, commandez avec le fournisseur, imaginez un modèle avec notre outil IA et faites-le coudre avec un tailleur.
           </Text>
           <View style={styles.heroCtas}>
             <Pressable
@@ -89,7 +98,7 @@ export default function Home() {
               style={styles.primaryCta}
               onPress={() => router.push("/(tabs)/shop")}
             >
-              <Text style={styles.primaryCtaText}>Découvrir la boutique</Text>
+              <Text style={styles.primaryCtaText}>Trouver une boutique</Text>
               <Icon name="arrow-right" size={16} color={colors.onBrandPrimary} />
             </Pressable>
             <Pressable
@@ -97,7 +106,7 @@ export default function Home() {
               style={styles.ghostCta}
               onPress={() => router.push("/(tabs)/models")}
             >
-              <Text style={styles.ghostCtaText}>Voir les tailleurs</Text>
+              <Text style={styles.ghostCtaText}>Voir nos tailleurs</Text>
             </Pressable>
           </View>
         </View>
@@ -110,29 +119,30 @@ export default function Home() {
       ) : (
         <FlatList
           horizontal
-          data={categories.data || []}
+          data={((categories.data as any[]) || []).filter((c) => categoryImageSource(c))}
           keyExtractor={(i: any) => i.id}
           contentContainerStyle={styles.chipsRow}
           showsHorizontalScrollIndicator={false}
           renderItem={({ item }: any) => {
             const img = categoryImageSource(item);
             return (
-            <Pressable
-              testID={`category-${item.slug}`}
-              style={styles.catCard}
-              onPress={() => router.push(`/(tabs)/shop?category=${item.slug}`)}
-            >
-              {img ? (
-                <Image source={img} style={styles.catImage} contentFit="cover" />
-              ) : (
-                <View style={[styles.catImage, { backgroundColor: colors.surfaceInverse }]} />
-              )}
-              <LinearGradient
-                colors={["transparent", "rgba(17,17,17,0.85)"]}
-                style={StyleSheet.absoluteFill}
-              />
-              <Text style={styles.catName}>{item.name}</Text>
-            </Pressable>
+              <Pressable
+                testID={`category-${item.slug || item.id}`}
+                style={styles.catWrap}
+                onPress={() => router.push(`/(tabs)/shop?category=${item.slug || item.id}`)}
+              >
+                <View style={styles.catCard}>
+                  <Image
+                    source={img!}
+                    style={styles.catImage}
+                    contentFit="cover"
+                    recyclingKey={`cat-${item.slug || item.id}`}
+                  />
+                </View>
+                <Text numberOfLines={2} style={styles.catTitle}>
+                  {item.name}
+                </Text>
+              </Pressable>
             );
           }}
         />
@@ -318,6 +328,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   brand: { color: colors.onSurfaceInverse, fontSize: 22, fontWeight: "500", letterSpacing: -0.5 },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  brandLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#000",
+  },
   iconBtn: {
     width: 40,
     height: 40,
@@ -326,9 +343,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  heroActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   heroBottom: { position: "absolute", bottom: 24, left: 20, right: 20 },
   heroTitle: { color: colors.onSurfaceInverse, fontSize: 34, fontWeight: "500", lineHeight: 40, letterSpacing: -1 },
-  heroSub: { color: colors.onSurfaceInverse, opacity: 0.85, marginTop: 12, fontSize: 14, lineHeight: 20 },
+  heroSub: { color: colors.onSurfaceInverse, opacity: 0.85, marginTop: 12, fontSize: 14, lineHeight: 21 },
   heroCtas: { flexDirection: "row", gap: 10, marginTop: 20, flexWrap: "wrap" },
   primaryCta: {
     backgroundColor: colors.surface,
@@ -386,17 +404,35 @@ const styles = StyleSheet.create({
   recoName: { color: colors.onSurfaceInverse, fontSize: 14, fontWeight: "500" },
   recoMeta: { color: colors.onSurfaceInverse, opacity: 0.75, fontSize: 11, marginTop: 2 },
   recoPrice: { color: colors.onSurfaceInverse, fontSize: 13, fontWeight: "500", marginTop: 6 },
+  catWrap: {
+    width: 148,
+    gap: 8,
+  },
   catCard: {
-    width: 130,
-    height: 160,
-    borderRadius: 12,
+    width: 148,
+    height: 148,
+    borderRadius: 14,
     overflow: "hidden",
-    justifyContent: "flex-end",
-    padding: 12,
     backgroundColor: colors.surfaceSecondary,
   },
-  catImage: { ...StyleSheet.absoluteFillObject },
-  catName: { color: colors.onSurfaceInverse, fontWeight: "500", fontSize: 14, zIndex: 2 },
+  catImage: {
+    width: 148,
+    height: 148,
+  },
+  catTitle: {
+    color: colors.onSurface,
+    fontWeight: "500",
+    fontSize: 13,
+    lineHeight: 17,
+    paddingHorizontal: 2,
+  },
+  catFallback: {
+    alignItems: "flex-end",
+    justifyContent: "flex-end",
+    padding: 12,
+    backgroundColor: colors.surfaceInverse,
+  },
+  catName: { color: colors.onSurfaceInverse, fontWeight: "500", fontSize: 14 },
   prodCard: {
     width: 200,
     borderRadius: 12,

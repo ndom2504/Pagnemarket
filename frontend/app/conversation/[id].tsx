@@ -60,10 +60,22 @@ export default function ConversationScreen() {
       qc.invalidateQueries({ queryKey: ["messages", id] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
       qc.invalidateQueries({ queryKey: ["conversation", id] });
+      qc.invalidateQueries({ queryKey: ["notifications-summary"] });
     },
   });
 
   const data = (messages.data as any[]) || [];
+
+  useEffect(() => {
+    if (!id || !isParticipant) return;
+    api(`/conversations/${id}/read`, { method: "POST" })
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["conversations"] });
+        qc.invalidateQueries({ queryKey: ["notifications-summary"] });
+        qc.invalidateQueries({ queryKey: ["notifications"] });
+      })
+      .catch(() => {});
+  }, [id, isParticipant, data.length, qc]);
 
   useEffect(() => {
     if (data.length) {

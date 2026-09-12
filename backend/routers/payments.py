@@ -1,4 +1,4 @@
-"""Mobile Money payments (Orange, MTN, Moov) via CinetPay, with simulation fallback when keys are absent."""
+"""Payments: Mobile Money (CinetPay) + Stripe Checkout (card)."""
 import logging
 import math
 import os
@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Literal, Optional
 
 import httpx
+import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -19,6 +20,9 @@ router = APIRouter()
 CINETPAY_PAYMENT = "https://api-checkout.cinetpay.com/v2/payment"
 CINETPAY_CHECK = "https://api-checkout.cinetpay.com/v2/payment/check"
 SIMULATION_DELAY_S = 6
+SHIPPING_FEE_XAF = 2500
+PAID_LIKE = ("PAID", "SUCCEEDED")
+PLATFORM_COMMISSION_RATE = 0.10  # informational only — no Stripe Connect payouts
 
 COUNTRY_CODES = {
     "côte d'ivoire": ("CI", "XOF"), "cote d'ivoire": ("CI", "XOF"), "cameroun": ("CM", "XAF"),
@@ -42,6 +46,27 @@ def cinetpay_config() -> Optional[dict]:
     return None
 
 
+def stripe_secret_key() -> Optional[str]:
+    key = (os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+    return key or None
+
+
+def stripe_webhook_secret() -> Optional[str]:
+    return (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip() or None
+
+
+def stripe_publishable_key() -> Optional[str]:
+    return (os.environ.get("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY") or "").strip() or None
+
+
+def configure_stripe() -> str:
+    secret = stripe_secret_key()
+    if not secret:
+        raise HTTPException(503, "STRIPE_SECRET_KEY manquante")
+    stripe.api_key = secret
+    return secret
+
+
 class OrderDraft(BaseModel):
     address: str
     city: str
@@ -54,23 +79,35 @@ class MobileMoneyInit(OrderDraft):
     momoPhone: str
 
 
+class StripeCheckoutInit(OrderDraft):
+    pass
+
+
 async def build_order_from_cart(user: dict, body: OrderDraft, payment_method: str) -> dict:
     cart = await db.carts.find_one({"userId": user["id"]}) or {"items": []}
     if not cart.get("items"):
         raise HTTPException(400, "Panier vide")
-    items, total = [], 0.0
+    items, subtotal = [], 0.0
     for it in cart["items"]:
+        qty = int(it.get("quantity") or 0)
+        if qty < 1:
+            continue
         p = await db.products.find_one({"id": it["productId"]}, {"_id": 0})
         if not p:
             continue
-        price = p.get("promoPrice") or p["price"]
-        line_total = price * it["quantity"]
-        total += line_total
+        stock = int(p.get("stock") or 0)
+        if stock < qty:
+            raise HTTPException(400, f"Stock insuffisant pour « {p.get('name', 'produit')} » (dispo {stock})")
+        price = float(p.get("promoPrice") or p["price"])
+        if price <= 0:
+            raise HTTPException(400, f"Prix invalide pour « {p.get('name')} »")
+        line_total = price * qty
+        subtotal += line_total
         items.append({
             "productId": p["id"],
             "name": p["name"],
             "image": p["images"][0] if p.get("images") else None,
-            "quantity": it["quantity"],
+            "quantity": qty,
             "price": price,
             "category": p.get("category"),
             "supplierId": p.get("supplierId"),
@@ -78,12 +115,16 @@ async def build_order_from_cart(user: dict, body: OrderDraft, payment_method: st
         })
     if not items:
         raise HTTPException(400, "Panier vide")
+    shipping = SHIPPING_FEE_XAF if items else 0
+    total = subtotal + shipping
     return {
         "id": str(uuid.uuid4()),
         "userId": user["id"],
         "customerName": f"{user.get('firstName', '')} {user.get('lastName', '')}".strip(),
         "items": items,
         "supplierIds": sorted({i["supplierId"] for i in items if i.get("supplierId")}),
+        "subtotal": subtotal,
+        "shippingFee": shipping,
         "total": total,
         "currency": "XAF",
         "status": "confirmed",
@@ -98,11 +139,21 @@ async def build_order_from_cart(user: dict, body: OrderDraft, payment_method: st
     }
 
 
-async def mark_order_paid(payment: dict):
+def _payment_is_paid(payment: dict) -> bool:
+    return payment.get("status") in PAID_LIKE
+
+
+async def mark_order_paid(payment: dict, *, provider_payment_id: Optional[str] = None):
+    if _payment_is_paid(payment):
+        return
     now = datetime.now(timezone.utc)
+    paid_status = "SUCCEEDED" if payment.get("mode") == "stripe" else "PAID"
+    patch = {"status": paid_status, "updatedAt": now, "paidAt": now}
+    if provider_payment_id:
+        patch["providerPaymentId"] = provider_payment_id
     res = await db.payments.update_one(
-        {"transactionId": payment["transactionId"], "status": {"$ne": "PAID"}},
-        {"$set": {"status": "PAID", "updatedAt": now}},
+        {"transactionId": payment["transactionId"], "status": {"$nin": list(PAID_LIKE)}},
+        {"$set": patch},
     )
     if res.modified_count:
         await push_order_status({"id": payment["orderId"]}, "confirmed", {"paymentStatus": "paid", "paidAt": now})
@@ -113,8 +164,35 @@ async def mark_order_paid(payment: dict):
 
 
 async def mark_order_failed(payment: dict):
-    await db.payments.update_one({"transactionId": payment["transactionId"]}, {"$set": {"status": "FAILED"}})
+    if _payment_is_paid(payment):
+        return
+    await db.payments.update_one(
+        {"transactionId": payment["transactionId"]},
+        {"$set": {"status": "FAILED", "updatedAt": datetime.now(timezone.utc)}},
+    )
     await push_order_status({"id": payment["orderId"]}, "cancelled", {"paymentStatus": "failed"})
+
+
+async def mark_order_refunded(payment: dict):
+    now = datetime.now(timezone.utc)
+    await db.payments.update_one(
+        {"transactionId": payment["transactionId"]},
+        {"$set": {"status": "REFUNDED", "updatedAt": now, "refundedAt": now}},
+    )
+    await push_order_status({"id": payment["orderId"]}, "cancelled", {"paymentStatus": "refunded"})
+
+
+async def already_processed_event(event_id: str) -> bool:
+    existing = await db.stripe_events.find_one({"id": event_id}, {"_id": 0, "id": 1})
+    return bool(existing)
+
+
+async def remember_event(event_id: str, event_type: str):
+    await db.stripe_events.insert_one({
+        "id": event_id,
+        "type": event_type,
+        "processedAt": datetime.now(timezone.utc),
+    })
 
 
 async def verify_with_cinetpay(cfg: dict, transaction_id: str) -> dict:
@@ -124,9 +202,22 @@ async def verify_with_cinetpay(cfg: dict, transaction_id: str) -> dict:
 
 
 async def refresh_payment(payment: dict) -> dict:
-    """Refresh status from CinetPay (or simulate), apply side effects, return updated payment."""
-    if payment["status"] in ("PAID", "FAILED"):
+    """Refresh status from gateway (or simulate), apply side effects, return updated payment."""
+    if _payment_is_paid(payment) or payment.get("status") in ("FAILED", "REFUNDED"):
         return payment
+    if payment.get("mode") == "stripe":
+        configure_stripe()
+        session_id = payment.get("providerSessionId") or payment.get("stripeSessionId")
+        if session_id:
+            try:
+                session = stripe.checkout.Session.retrieve(session_id)
+                if session.payment_status == "paid":
+                    await mark_order_paid(payment, provider_payment_id=session.payment_intent)
+                elif session.status == "expired":
+                    await mark_order_failed(payment)
+            except Exception:  # noqa: BLE001
+                logger.exception("Stripe session refresh failed")
+        return await db.payments.find_one({"transactionId": payment["transactionId"]}, {"_id": 0})
     if payment["mode"] == "simulation":
         elapsed = (datetime.now(timezone.utc) - payment["createdAt"].replace(tzinfo=timezone.utc)).total_seconds()
         if elapsed >= SIMULATION_DELAY_S:
@@ -147,7 +238,15 @@ async def refresh_payment(payment: dict) -> dict:
 
 @router.get("/payments/config")
 async def payments_config():
-    return {"mobileMoneyMode": "live" if cinetpay_config() else "simulation", "operators": OPERATORS}
+    stripe_ok = bool(stripe_secret_key())
+    return {
+        "mobileMoneyMode": "live" if cinetpay_config() else "simulation",
+        "operators": OPERATORS,
+        "stripeEnabled": stripe_ok,
+        "stripePublishableKey": stripe_publishable_key() if stripe_ok else None,
+        "shippingFee": SHIPPING_FEE_XAF,
+        "currency": "XAF",
+    }
 
 
 @router.post("/payments/mobile-money/init")
@@ -173,11 +272,13 @@ async def init_mobile_money(body: MobileMoneyInit, request: Request, user: dict 
         "userId": user["id"],
         "amount": amount,
         "currency": currency,
+        "provider": "cinetpay" if cfg else "simulation",
         "operator": body.operator,
         "operatorLabel": OPERATORS[body.operator],
         "momoPhone": body.momoPhone,
         "status": "PENDING",
         "mode": "cinetpay" if cfg else "simulation",
+        "paymentMethod": f"mobile_money_{body.operator}",
         "paymentUrl": None,
         "createdAt": datetime.now(timezone.utc),
     }
@@ -237,14 +338,18 @@ async def payment_status(transaction_id: str, user: dict = Depends(current_user)
     if not payment:
         raise HTTPException(404, "Paiement introuvable")
     payment = await refresh_payment(payment)
+    status = payment["status"]
+    if status in PAID_LIKE:
+        status = "PAID"
     return {
         "transactionId": transaction_id,
         "orderId": payment["orderId"],
-        "status": payment["status"],
-        "mode": payment["mode"],
-        "operator": payment["operator"],
+        "status": status,
+        "mode": payment.get("mode"),
+        "operator": payment.get("operator"),
         "amount": payment["amount"],
         "currency": payment["currency"],
+        "provider": payment.get("provider"),
     }
 
 
@@ -260,7 +365,7 @@ async def cinetpay_webhook(request: Request):
     payment = await db.payments.find_one({"transactionId": transaction_id}, {"_id": 0})
     if not payment:
         raise HTTPException(404, "Transaction inconnue")
-    if payment["status"] == "PAID":
+    if payment["status"] in PAID_LIKE:
         return {"ok": True}
     data = (await verify_with_cinetpay(cfg, transaction_id)).get("data", {}) or {}
     if str(data.get("amount")) != str(payment["amount"]) or data.get("currency") != payment["currency"]:
@@ -277,3 +382,220 @@ async def payment_return():
     return """<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PagneMarket</title></head><body style="font-family:-apple-system,Segoe UI,sans-serif;background:#FAF8F3;color:#111;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:24px">
 <div><h1 style="font-weight:500">Paiement transmis</h1><p>Vous pouvez fermer cette fenêtre et revenir dans l'application PagneMarket.</p></div></body></html>"""
+
+
+# ------------------ STRIPE CHECKOUT ------------------
+
+@router.post("/payments/stripe/checkout")
+async def init_stripe_checkout(body: StripeCheckoutInit, request: Request, user: dict = Depends(current_user)):
+    configure_stripe()
+    order = await build_order_from_cart(user, body, "card")
+    order["status"] = "pending_payment"
+    order["paymentStatus"] = "pending"
+    order["statusHistory"] = [status_entry("pending_payment")]
+    await db.orders.insert_one(order.copy())
+
+    amount = int(round(order["total"]))
+    if amount < 100:
+        await push_order_status({"id": order["id"]}, "cancelled", {"paymentStatus": "failed"})
+        raise HTTPException(400, "Montant trop faible pour Stripe")
+
+    transaction_id = f"st_{uuid.uuid4().hex}"
+    base = public_base_url(request)
+    line_items = []
+    for it in order["items"]:
+        unit = int(round(float(it["price"])))
+        if unit < 1:
+            continue
+        line_items.append({
+            "price_data": {
+                "currency": "xaf",
+                "unit_amount": unit,
+                "product_data": {
+                    "name": (it.get("name") or "Article PagneMarket")[:120],
+                },
+            },
+            "quantity": int(it["quantity"]),
+        })
+    if order.get("shippingFee"):
+        line_items.append({
+            "price_data": {
+                "currency": "xaf",
+                "unit_amount": int(order["shippingFee"]),
+                "product_data": {"name": "Livraison"},
+            },
+            "quantity": 1,
+        })
+    if not line_items:
+        await push_order_status({"id": order["id"]}, "cancelled", {"paymentStatus": "failed"})
+        raise HTTPException(400, "Aucun article payable")
+
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            payment_method_types=["card"],
+            line_items=line_items,
+            success_url=f"{base}/api/payments/stripe/return?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base}/api/payments/stripe/cancel?order_id={order['id']}&transaction_id={transaction_id}",
+            client_reference_id=order["id"],
+            customer_email=user.get("email") or None,
+            metadata={
+                "orderId": order["id"],
+                "userId": user["id"],
+                "transactionId": transaction_id,
+                "app": "pagnemarket",
+            },
+            locale="fr",
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Stripe Checkout session create failed")
+        await push_order_status({"id": order["id"]}, "cancelled", {"paymentStatus": "failed"})
+        raise HTTPException(502, "Impossible de créer la session Stripe") from e
+
+    payment = {
+        "id": str(uuid.uuid4()),
+        "transactionId": transaction_id,
+        "orderId": order["id"],
+        "userId": user["id"],
+        "amount": amount,
+        "currency": "XAF",
+        "provider": "stripe",
+        "providerSessionId": session.id,
+        "stripeSessionId": session.id,
+        "providerPaymentId": None,
+        "status": "PENDING",
+        "mode": "stripe",
+        "paymentMethod": "card",
+        "paymentUrl": session.url,
+        "createdAt": datetime.now(timezone.utc),
+        "updatedAt": datetime.now(timezone.utc),
+    }
+    await db.payments.insert_one(payment.copy())
+    payment.pop("_id", None)
+    return {
+        "transactionId": transaction_id,
+        "orderId": order["id"],
+        "amount": amount,
+        "currency": "XAF",
+        "mode": "stripe",
+        "paymentUrl": session.url,
+        "sessionId": session.id,
+        "status": "PENDING",
+    }
+
+
+async def _payment_from_stripe_meta(meta: dict) -> Optional[dict]:
+    tid = (meta or {}).get("transactionId")
+    oid = (meta or {}).get("orderId")
+    if tid:
+        p = await db.payments.find_one({"transactionId": tid}, {"_id": 0})
+        if p:
+            return p
+    if oid:
+        return await db.payments.find_one({"orderId": oid, "mode": "stripe"}, {"_id": 0})
+    return None
+
+
+@router.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Dedicated PagneMarket Stripe webhook — do not reuse other apps' endpoints."""
+    wh_secret = stripe_webhook_secret()
+    if not wh_secret:
+        raise HTTPException(503, "STRIPE_WEBHOOK_SECRET manquante")
+    configure_stripe()
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature")
+    if not sig:
+        raise HTTPException(400, "Signature Stripe manquante")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, wh_secret)
+    except ValueError:
+        raise HTTPException(400, "Payload invalide")
+    except Exception as e:  # noqa: BLE001
+        # stripe.error.SignatureVerificationError (and aliases)
+        if e.__class__.__name__ == "SignatureVerificationError" or "signature" in str(e).lower():
+            raise HTTPException(400, "Signature Stripe invalide") from e
+        raise
+
+    event_id = event.get("id")
+    event_type = event.get("type")
+    if event_id and await already_processed_event(event_id):
+        return {"ok": True, "duplicate": True}
+
+    data_obj = event["data"]["object"]
+
+    if event_type == "checkout.session.completed":
+        payment = await _payment_from_stripe_meta(data_obj.get("metadata") or {})
+        if not payment and data_obj.get("id"):
+            payment = await db.payments.find_one({"stripeSessionId": data_obj["id"]}, {"_id": 0})
+        if payment and data_obj.get("payment_status") == "paid":
+            await mark_order_paid(payment, provider_payment_id=data_obj.get("payment_intent"))
+        elif payment and data_obj.get("status") == "expired":
+            await mark_order_failed(payment)
+
+    elif event_type == "payment_intent.succeeded":
+        meta = data_obj.get("metadata") or {}
+        payment = await _payment_from_stripe_meta(meta)
+        if not payment and data_obj.get("id"):
+            payment = await db.payments.find_one({"providerPaymentId": data_obj["id"]}, {"_id": 0})
+        if payment:
+            await mark_order_paid(payment, provider_payment_id=data_obj.get("id"))
+
+    elif event_type == "payment_intent.payment_failed":
+        meta = data_obj.get("metadata") or {}
+        payment = await _payment_from_stripe_meta(meta)
+        if payment:
+            await mark_order_failed(payment)
+
+    elif event_type == "charge.refunded":
+        pi = data_obj.get("payment_intent")
+        payment = None
+        if pi:
+            payment = await db.payments.find_one({"providerPaymentId": pi}, {"_id": 0})
+        if payment:
+            await mark_order_refunded(payment)
+
+    if event_id:
+        try:
+            await remember_event(event_id, event_type)
+        except Exception:  # noqa: BLE001
+            # Unique constraint race → treat as ok
+            pass
+
+    return {"ok": True}
+
+
+@router.get("/payments/stripe/return", response_class=HTMLResponse)
+async def stripe_return(session_id: Optional[str] = None):
+    # Never trust return URL alone — refresh against Stripe when possible.
+    if session_id and stripe_secret_key():
+        try:
+            configure_stripe()
+            session = stripe.checkout.Session.retrieve(session_id)
+            payment = await db.payments.find_one({"stripeSessionId": session_id}, {"_id": 0})
+            if payment and session.payment_status == "paid":
+                await mark_order_paid(payment, provider_payment_id=session.payment_intent)
+        except Exception:  # noqa: BLE001
+            logger.exception("stripe return refresh failed")
+    return """<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PagneMarket — Paiement</title></head><body style="font-family:-apple-system,Segoe UI,sans-serif;background:#FAF8F3;color:#111;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:24px">
+<div><h1 style="font-weight:500">Merci</h1><p>Si le paiement a réussi, votre commande sera confirmée sous peu. Fermez cette fenêtre et revenez dans PagneMarket.</p></div></body></html>"""
+
+
+@router.get("/payments/stripe/cancel", response_class=HTMLResponse)
+async def stripe_cancel(order_id: Optional[str] = None, transaction_id: Optional[str] = None):
+    if transaction_id:
+        payment = await db.payments.find_one({"transactionId": transaction_id}, {"_id": 0})
+        if payment and not _payment_is_paid(payment):
+            await db.payments.update_one(
+                {"transactionId": transaction_id},
+                {"$set": {"status": "FAILED", "updatedAt": datetime.now(timezone.utc)}},
+            )
+            await push_order_status({"id": payment["orderId"]}, "cancelled", {"paymentStatus": "failed"})
+    elif order_id:
+        payment = await db.payments.find_one({"orderId": order_id, "mode": "stripe"}, {"_id": 0})
+        if payment and not _payment_is_paid(payment):
+            await mark_order_failed(payment)
+    return """<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PagneMarket</title></head><body style="font-family:-apple-system,Segoe UI,sans-serif;background:#FAF8F3;color:#111;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:24px">
+<div><h1 style="font-weight:500">Paiement annulé</h1><p>Vous pouvez fermer cette fenêtre et réessayer dans PagneMarket.</p></div></body></html>"""

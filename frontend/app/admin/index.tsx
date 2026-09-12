@@ -14,9 +14,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
+import { PAYMENT_STATUS_LABEL } from "@/src/order-status";
 import { colors } from "@/src/theme";
 
-type Tab = "overview" | "users" | "products" | "orders" | "messages";
+type Tab = "overview" | "users" | "products" | "orders" | "payments" | "messages";
 
 export default function AdminDashboard() {
   const insets = useSafeAreaInsets();
@@ -44,6 +45,11 @@ export default function AdminDashboard() {
     queryKey: ["admin-conversations"],
     queryFn: () => api("/admin/conversations"),
     enabled: tab === "messages",
+  });
+  const payments = useQuery({
+    queryKey: ["admin-payments"],
+    queryFn: () => api("/admin/payments"),
+    enabled: tab === "payments",
   });
 
   if (user && !(user.roles || []).includes("admin")) {
@@ -88,6 +94,7 @@ export default function AdminDashboard() {
             ["users", "Utilisateurs"],
             ["products", "Produits"],
             ["orders", "Commandes"],
+            ["payments", "Paiements"],
             ["messages", "Messages"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
@@ -179,6 +186,42 @@ export default function AdminDashboard() {
               </View>
             </View>
           )}
+        />
+      )}
+
+      {tab === "payments" && (
+        <ListBlock
+          loading={payments.isLoading}
+          data={(payments.data as any[]) || []}
+          empty="Aucun paiement"
+          renderItem={(p) => {
+            const st = PAYMENT_STATUS_LABEL[p.status] || p.status;
+            const ref = p.providerPaymentId || p.stripeSessionId || p.providerSessionId || p.transactionId;
+            return (
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowTitle}>
+                    {formatXAF(p.amount)} {p.currency || "XAF"} · {st}
+                  </Text>
+                  <Text style={styles.rowMeta}>
+                    {(p.provider || p.mode || "—") +
+                      " · " +
+                      (p.paymentMethod || p.operator || "—") +
+                      " · commande " +
+                      String(p.orderId || "").slice(0, 8)}
+                  </Text>
+                  <Text style={styles.rowMeta} numberOfLines={1}>
+                    Réf. {ref}
+                  </Text>
+                  {p.createdAt ? (
+                    <Text style={styles.rowMeta}>
+                      {new Date(p.createdAt).toLocaleString("fr-FR")}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          }}
         />
       )}
 

@@ -4,14 +4,18 @@ import { LogBox, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import * as SplashScreen from "expo-splash-screen";
 import Feather from "@react-native-vector-icons/feather";
 
 import { ErrorBoundary } from "@/src/components/error-boundary";
+import { NotificationsBootstrap } from "@/src/components/notifications-bootstrap";
 import { queryClient } from "@/src/query-client";
 import { AuthProvider } from "@/src/auth";
 import { colors } from "@/src/theme";
 
 LogBox.ignoreAllLogs(true);
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // Prewarm vector icon font so it loads reliably in Expo Go Android.
 const PrewarmIcons = () => (
@@ -29,6 +33,7 @@ export default function RootLayout() {
             <AuthProvider>
               <StatusBar style="dark" />
               <PrewarmIcons />
+              <NotificationsBootstrap />
               <Stack
                 screenOptions={{
                   headerShown: false,

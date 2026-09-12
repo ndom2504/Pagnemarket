@@ -17,6 +17,7 @@ from routers import reco as reco_router
 from routers import reviews as reviews_router
 from routers import ai_looks as ai_looks_router
 from routers import otp_auth as otp_auth_router
+from routers import google_auth as google_auth_router
 from routers import admin as admin_router
 from routers.admin import ensure_admin_user
 from routers.payments import OrderDraft, build_order_from_cart
@@ -402,7 +403,6 @@ async def update_me(request: Request, body: UserUpdate, user: dict = Depends(cur
 DEFAULT_CATEGORIES = [
     # Wax & imprimés
     {"id": "wax", "slug": "wax", "name": "Wax", "group": "wax", "image": "/images/categories/wax.png"},
-    {"id": "ankara", "slug": "ankara", "name": "Ankara", "group": "wax", "image": "/images/categories/ankara.png"},
     {"id": "vlisco", "slug": "vlisco", "name": "Wax hollandais", "group": "wax", "image": "/images/categories/vlisco.png"},
     # Tissus traditionnels
     {"id": "kente", "slug": "kente", "name": "Kente", "group": "traditionnel", "image": "/images/categories/kente.png"},
@@ -417,8 +417,14 @@ DEFAULT_CATEGORIES = [
     # Cérémonie & luxe
     {"id": "bazin", "slug": "bazin", "name": "Bazin", "group": "ceremonie", "image": "/images/categories/bazin.png"},
     {"id": "dentelle", "slug": "dentelle", "name": "Dentelle", "group": "ceremonie", "image": "/images/categories/dentelle.png"},
-    # Gabon
-    {"id": "gabon", "slug": "gabon", "name": "Tissus du Gabon", "group": "pays", "image": "/images/categories/gabon.png"},
+    # Par pays
+    {"id": "gabon", "slug": "gabon", "name": "Tissus Gabon", "group": "pays", "image": "/images/categories/gabon.png"},
+    {"id": "burkina", "slug": "burkina", "name": "Tissus Burkina", "group": "pays", "image": "/images/categories/burkina.png"},
+    {"id": "nigeria", "slug": "nigeria", "name": "Tissus Nigeria", "group": "pays", "image": "/images/categories/nigeria.png"},
+    {"id": "togo", "slug": "togo", "name": "Tissu Togo", "group": "pays", "image": "/images/categories/togo.png"},
+    {"id": "ghana", "slug": "ghana", "name": "Tissu Ghana", "group": "pays", "image": "/images/categories/ghana.png"},
+    {"id": "cote-ivoire", "slug": "cote-ivoire", "name": "Tissus Côte d'Ivoire", "group": "pays", "image": "/images/categories/cote-ivoire.png"},
+    {"id": "benin", "slug": "benin", "name": "Tissus Bénin", "group": "pays", "image": "/images/categories/benin.png"},
     # Accessoires
     {"id": "accessoires", "slug": "accessoires", "name": "Accessoires", "group": "accessoires", "image": "/images/categories/accessoires.png"},
 ]
@@ -647,7 +653,12 @@ async def toggle_fav(body: FavToggle, user: dict = Depends(current_user)):
 
 @api_router.post("/orders")
 async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
-    # Card payment (simulation) — Mobile Money goes through /payments/mobile-money/init
+    # Card payments must go through Stripe Checkout — never mark paid from the client alone.
+    if (body.paymentMethod or "").lower() in ("card", "stripe", "carte"):
+        raise HTTPException(
+            400,
+            "Paiement carte : utilisez POST /payments/stripe/checkout",
+        )
     order = await build_order_from_cart(user, OrderDraft(**body.model_dump(exclude={"paymentMethod"})), body.paymentMethod)
     await db.orders.insert_one(order.copy())
     await decrement_stock(order["items"])
@@ -672,9 +683,43 @@ async def get_order(oid: str, user: dict = Depends(current_user)):
 
 # ------------------ MESSAGES ------------------
 
+def _unread_for(conv: dict, uid: str) -> int:
+    unread = conv.get("unreadBy") or {}
+    try:
+        return int(unread.get(uid) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+async def create_inbox_notification(
+    user_id: str,
+    *,
+    kind: str,
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+):
+    payload = data or {}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "userId": user_id,
+        "kind": kind,
+        "title": title,
+        "body": body,
+        "data": payload,
+        "conversationId": payload.get("conversationId"),
+        "read": False,
+        "createdAt": datetime.now(timezone.utc),
+    }
+    await db.notifications.insert_one(doc.copy())
+    return doc
+
+
 @api_router.get("/conversations")
 async def list_conversations(user: dict = Depends(current_user)):
     convs = await db.conversations.find({"participantIds": user["id"]}, {"_id": 0}).sort("updatedAt", -1).to_list(100)
+    for c in convs:
+        c["unreadCount"] = _unread_for(c, user["id"])
     return convs
 
 @api_router.get("/conversations/{conversation_id}")
@@ -685,7 +730,25 @@ async def get_conversation(conversation_id: str, user: dict = Depends(current_us
     is_admin = "admin" in (user.get("roles") or [])
     if not is_admin and user["id"] not in (conv.get("participantIds") or []):
         raise HTTPException(404, "Conversation introuvable")
+    conv["unreadCount"] = _unread_for(conv, user["id"])
     return conv
+
+@api_router.post("/conversations/{conversation_id}/read")
+async def mark_conversation_read(conversation_id: str, user: dict = Depends(current_user)):
+    conv = await db.conversations.find_one({"id": conversation_id}, {"_id": 0})
+    if not conv or user["id"] not in (conv.get("participantIds") or []):
+        raise HTTPException(404, "Conversation introuvable")
+    unread = dict(conv.get("unreadBy") or {})
+    unread[user["id"]] = 0
+    await db.conversations.update_one(
+        {"id": conversation_id},
+        {"$set": {"unreadBy": unread}},
+    )
+    await db.notifications.update_many(
+        {"userId": user["id"], "kind": "message", "conversationId": conversation_id, "read": False},
+        {"$set": {"read": True}},
+    )
+    return {"ok": True}
 
 @api_router.post("/messages/send")
 async def send_message(body: SendMessage, user: dict = Depends(current_user)):
@@ -714,11 +777,14 @@ async def send_message(body: SendMessage, user: dict = Depends(current_user)):
             "participants": [me_p, peer_p],
             "lastMessage": text,
             "updatedAt": now,
+            "unreadBy": {peer_id: 1, user["id"]: 0},
         }
         await db.conversations.insert_one(conv.copy())
     else:
         conv_id = conv["id"]
-        # Refresh participant metadata
+        unread = dict(conv.get("unreadBy") or {})
+        unread[peer_id] = int(unread.get(peer_id) or 0) + 1
+        unread[user["id"]] = 0
         await db.conversations.update_one(
             {"id": conv_id},
             {
@@ -727,6 +793,7 @@ async def send_message(body: SendMessage, user: dict = Depends(current_user)):
                     "updatedAt": now,
                     "participants": [me_p, peer_p],
                     "participantIds": [user["id"], peer_id],
+                    "unreadBy": unread,
                 }
             },
         )
@@ -739,6 +806,13 @@ async def send_message(body: SendMessage, user: dict = Depends(current_user)):
         "createdAt": now,
     }
     await db.messages.insert_one(msg.copy())
+    await create_inbox_notification(
+        peer_id,
+        kind="message",
+        title=me_p["name"] or "Nouveau message",
+        body=text[:140],
+        data={"conversationId": conv_id, "fromUserId": user["id"]},
+    )
     msg.pop("_id", None)
     msg["toUserId"] = peer_id
     return msg
@@ -753,6 +827,42 @@ async def get_messages(conversation_id: str, user: dict = Depends(current_user))
         raise HTTPException(404, "Conversation introuvable")
     return await db.messages.find({"conversationId": conversation_id}, {"_id": 0}).sort("createdAt", 1).to_list(500)
 
+
+@api_router.get("/notifications/summary")
+async def notifications_summary(user: dict = Depends(current_user)):
+    convs = await db.conversations.find({"participantIds": user["id"]}, {"_id": 0, "unreadBy": 1}).to_list(500)
+    unread_messages = sum(_unread_for(c, user["id"]) for c in convs)
+    unread_notifications = await db.notifications.count_documents({"userId": user["id"], "read": False})
+    return {
+        "unreadMessages": unread_messages,
+        "unreadNotifications": unread_notifications,
+        # Bell uses inbox count; tab badge uses message unread (avoid double-counting).
+        "total": unread_notifications,
+    }
+
+
+@api_router.get("/notifications")
+async def list_notifications(user: dict = Depends(current_user)):
+    items = await db.notifications.find({"userId": user["id"]}, {"_id": 0}).sort("createdAt", -1).to_list(100)
+    return items
+
+
+@api_router.post("/notifications/read-all")
+async def read_all_notifications(user: dict = Depends(current_user)):
+    await db.notifications.update_many({"userId": user["id"], "read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+@api_router.post("/notifications/{nid}/read")
+async def read_notification(nid: str, user: dict = Depends(current_user)):
+    res = await db.notifications.update_one(
+        {"id": nid, "userId": user["id"]},
+        {"$set": {"read": True}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Notification introuvable")
+    return {"ok": True}
+
 # ------------------ APP WIRING ------------------
 
 @api_router.get("/")
@@ -766,6 +876,7 @@ api_router.include_router(reco_router.router)
 api_router.include_router(reviews_router.router)
 api_router.include_router(ai_looks_router.router)
 api_router.include_router(otp_auth_router.router)
+api_router.include_router(google_auth_router.router)
 api_router.include_router(admin_router.router)
 app.include_router(api_router)
 # Vercel serves this function at /api and sometimes strips that prefix.

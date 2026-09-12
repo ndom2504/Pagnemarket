@@ -2,8 +2,13 @@ import { Tabs } from "expo-router";
 import { colors } from "@/src/theme";
 import { Icon } from "@/src/icon";
 import { Platform } from "react-native";
+import { useNotificationSummary } from "@/src/hooks/use-notification-summary";
+import { formatBadgeCount } from "@/src/notifications";
 
 export default function TabsLayout() {
+  const { unreadMessages } = useNotificationSummary();
+  const badge = formatBadgeCount(unreadMessages);
+
   return (
     <Tabs
       screenOptions={{
@@ -44,6 +49,13 @@ export default function TabsLayout() {
         name="messages"
         options={{
           title: "Messages",
+          tabBarBadge: badge,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.brandSecondary,
+            color: colors.onBrandSecondary,
+            fontSize: 10,
+            fontWeight: "700",
+          },
           tabBarIcon: ({ color }) => <Icon name="message-circle" color={color} size={22} />,
         }}
       />

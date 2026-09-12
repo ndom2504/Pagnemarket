@@ -21,6 +21,7 @@ type Ctx = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<User>;
   signUp: (data: any) => Promise<User>;
+  signInWithGoogle: (idToken: string, extra?: Record<string, any>) => Promise<User>;
   sendOtp: (phone: string, countryIso?: string) => Promise<{ phone: string }>;
   verifyOtp: (data: any) => Promise<User>;
   signOut: () => Promise<void>;
@@ -78,6 +79,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return r.user;
   };
 
+  const signInWithGoogle = async (idToken: string, extra?: Record<string, any>) => {
+    const r = await api<{ token: string; user: User }>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ idToken, ...(extra || {}) }),
+      auth: false,
+    });
+    await setToken(r.token);
+    setUser(r.user);
+    return r.user;
+  };
+
   const sendOtp = async (phone: string, countryIso?: string) => {
     return api<{ phone: string }>("/auth/otp/send", {
       method: "POST",
@@ -112,7 +124,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, sendOtp, verifyOtp, signOut, refresh, updateProfile }}>
+    <AuthCtx.Provider
+      value={{
+        user,
+        loading,
+        signIn,
+        signUp,
+        signInWithGoogle,
+        sendOtp,
+        verifyOtp,
+        signOut,
+        refresh,
+        updateProfile,
+      }}
+    >
       {children}
     </AuthCtx.Provider>
   );

@@ -75,7 +75,7 @@ export default function OrderTracking() {
               {cancelled
                 ? "Cette commande a été annulée."
                 : pendingPay
-                ? "En attente de la confirmation du paiement Mobile Money."
+                ? "En attente de la confirmation du paiement (carte ou Mobile Money)."
                 : STEPS[currentIdx]?.desc}
             </Text>
           </View>

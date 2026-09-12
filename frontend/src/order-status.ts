@@ -16,8 +16,22 @@ export function statusOf(s: string) {
 }
 
 export const PAYMENT_LABEL: Record<string, string> = {
-  card: "Carte bancaire",
+  card: "Carte bancaire (Stripe)",
+  stripe: "Carte bancaire (Stripe)",
   mobile_money_orange: "Orange Money",
   mobile_money_mtn: "MTN MoMo",
   mobile_money_moov: "Moov Money",
+};
+
+export const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  PENDING: "En attente",
+  PROCESSING: "En cours",
+  PAID: "Payé",
+  SUCCEEDED: "Payé",
+  FAILED: "Échoué",
+  REFUNDED: "Remboursé",
+  pending: "En attente",
+  paid: "Payé",
+  failed: "Échoué",
+  refunded: "Remboursé",
 };

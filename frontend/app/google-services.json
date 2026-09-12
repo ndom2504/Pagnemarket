@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "553733785848",
+    "project_id": "pagnemarket-9fadd",
+    "storage_bucket": "pagnemarket-9fadd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:553733785848:android:d464a25c4f03de8977130d",
+        "android_client_info": {
+          "package_name": "com.emergent.tissuehub.gpxlrs"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "553733785848-3vfqr0c5umpab78p3qc6prvpmvnb5oi3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.emergent.tissuehub.gpxlrs",
+            "certificate_hash": "64c2fcbccd888865f6eff26c5a37fe003d8295cc"
+          }
+        },
+        {
+          "client_id": "553733785848-h4it33p9895j5idl80643vn7ad5q7602.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgNsmuBT4RexU40F_LohWTq2JJ8lS23PY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "553733785848-bgr9oh3t8i7dkb7n5c0nu131se43oiv0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "553733785848-6t4ufu5i5elujlj77quhv35kqlfvga0t.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.emergent.tissuehub.gpxlrs"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

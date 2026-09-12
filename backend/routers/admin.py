@@ -105,6 +105,19 @@ async def admin_orders(_admin: dict = Depends(current_admin)):
     return await db.orders.find({}, {"_id": 0}).sort("createdAt", -1).to_list(500)
 
 
+@router.get("/payments")
+async def admin_payments(_admin: dict = Depends(current_admin)):
+    items = await db.payments.find({}, {"_id": 0}).sort("createdAt", -1).to_list(500)
+    # Attach order totals / city when present
+    out = []
+    for p in items:
+        order = await db.orders.find_one({"id": p.get("orderId")}, {"_id": 0, "total": 1, "city": 1, "customerName": 1, "status": 1})
+        row = dict(p)
+        row["order"] = order
+        out.append(row)
+    return out
+
+
 @router.get("/conversations")
 async def admin_conversations(_admin: dict = Depends(current_admin)):
     return await db.conversations.find({}, {"_id": 0}).sort("updatedAt", -1).to_list(200)
