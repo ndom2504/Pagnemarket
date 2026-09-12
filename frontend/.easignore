@@ -1,0 +1,12 @@
+# Keep EAS builds lean — local/dev only files
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.git
+**/__pycache__
+**/metro-cache
+**/.expo
+**/wipe_virtual.py
+**/*.log
+**/coverage

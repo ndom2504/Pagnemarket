@@ -3,13 +3,17 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "preinstall": "./scripts/cmd-guard.js --preinstall",
+    "preinstall": "node ./scripts/cmd-guard.js --preinstall",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:ios": "eas build --platform ios --profile production",
+    "build:ios:preview": "eas build --platform ios --profile preview",
+    "submit:ios": "eas submit --platform ios --profile production --latest",
+    "ship:ios": "eas build --platform ios --profile production --auto-submit"
   },
   "dependencies": {
     "@expo/metro-runtime": "57.0.15",
@@ -19,7 +23,7 @@
     "@tanstack/react-query": "5.102.8",
     "date-fns": "4.1.0",
     "dayjs": "1.11.13",
-    "expo": "57.0.19",
+    "expo": "~57.0.22",
     "expo-auth-session": "7.0.11",
     "expo-av": "16.0.8",
     "expo-blur": "57.0.2",

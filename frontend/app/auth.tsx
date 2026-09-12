@@ -50,8 +50,10 @@ export default function AuthScreen() {
   const [specialty, setSpecialty] = useState("");
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [role, setRole] = useState<RoleChoice>("buyer");
-  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const busy = googleLoading || submitLoading;
 
   const goHome = (roles?: string[]) => {
     router.replace(homeForRoles(roles?.length ? roles : [role]));
@@ -98,8 +100,9 @@ export default function AuthScreen() {
       setErr("Google Auth non configuré (EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID)");
       return;
     }
+    if (busy) return;
     if (mode === "register" && !requireRegisterLocation({ skipNames: true })) return;
-    setLoading(true);
+    setGoogleLoading(true);
     try {
       const token = await promptGoogleIdToken(googleExtra());
       if (!token) {
@@ -111,7 +114,7 @@ export default function AuthScreen() {
     } catch (e: any) {
       setErr(e.message || "Connexion Google impossible");
     } finally {
-      setLoading(false);
+      setGoogleLoading(false);
     }
   };
 
@@ -122,20 +125,20 @@ export default function AuthScreen() {
       setErr("Indiquez votre numéro de téléphone");
       return;
     }
-    setLoading(true);
+    setSubmitLoading(true);
     try {
       await sendOtp(formatPhone(phone.trim(), country), country.iso);
       setStep("code");
     } catch (e: any) {
       setErr(e.message || "Impossible d'envoyer le SMS");
     } finally {
-      setLoading(false);
+      setSubmitLoading(false);
     }
   };
 
   const onVerifyOtp = async () => {
     setErr(null);
-    setLoading(true);
+    setSubmitLoading(true);
     try {
       const u = await verifyOtp({
         phone: formatPhone(phone.trim(), country),
@@ -153,24 +156,25 @@ export default function AuthScreen() {
     } catch (e: any) {
       setErr(e.message || "Code incorrect");
     } finally {
-      setLoading(false);
+      setSubmitLoading(false);
     }
   };
 
   const onSubmit = async () => {
+    if (busy) return;
     if (method === "otp") {
       if (step === "form") return onSendOtp();
       return onVerifyOtp();
     }
     setErr(null);
-    setLoading(true);
+    setSubmitLoading(true);
     try {
       if (mode === "login") {
         const u = await signIn(email.trim(), password);
         goHome(u.roles);
       } else {
         if (!requireRegisterLocation()) {
-          setLoading(false);
+          setSubmitLoading(false);
           return;
         }
         const u = await signUp({
@@ -189,7 +193,7 @@ export default function AuthScreen() {
     } catch (e: any) {
       setErr(e.message || "Une erreur est survenue");
     } finally {
-      setLoading(false);
+      setSubmitLoading(false);
     }
   };
 
@@ -418,11 +422,11 @@ export default function AuthScreen() {
 
           <Pressable
             testID="auth-google"
-            style={[styles.googleBtn, (!googleReady || loading) && { opacity: 0.55 }]}
+            style={[styles.googleBtn, (!googleReady || busy) && { opacity: 0.55 }]}
             onPress={onGoogle}
-            disabled={loading || !googleReady}
+            disabled={busy || !googleReady}
           >
-            {loading ? (
+            {googleLoading ? (
               <ActivityIndicator color={colors.onSurface} />
             ) : (
               <>
@@ -440,11 +444,11 @@ export default function AuthScreen() {
 
           <Pressable
             testID="auth-submit"
-            style={styles.cta}
+            style={[styles.cta, busy && { opacity: 0.7 }]}
             onPress={onSubmit}
-            disabled={loading}
+            disabled={busy}
           >
-            {loading ? (
+            {submitLoading ? (
               <ActivityIndicator color={colors.onBrandPrimary} />
             ) : (
               <>

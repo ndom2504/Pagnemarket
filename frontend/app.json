@@ -6,13 +6,41 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pagnemarket",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.tissuehub.gpxlrs",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "Photographiez votre profil ou vos tissus",
-        "NSPhotoLibraryUsageDescription": "Choisissez une photo de profil ou des tissus"
+        "CFBundleDisplayName": "PagneMarket",
+        "NSCameraUsageDescription": "Photographiez votre profil, vos tissus ou vos créations.",
+        "NSPhotoLibraryUsageDescription": "Choisissez une photo de profil, de tissu ou de création.",
+        "NSPhotoLibraryAddUsageDescription": "Enregistrez des images dans votre photothèque.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["remote-notification"]
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          }
+        ]
       }
     },
     "android": {
@@ -21,7 +49,13 @@
         "backgroundColor": "#000000"
       },
       "package": "com.emergent.tissuehub.gpxlrs",
-      "permissions": ["CAMERA", "READ_MEDIA_IMAGES", "POST_NOTIFICATIONS", "VIBRATE"]
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -48,8 +82,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Choisissez une photo de profil ou des tissus",
-          "cameraPermission": "Photographiez votre profil ou vos tissus"
+          "photosPermission": "Choisissez une photo de profil, de tissu ou de création.",
+          "cameraPermission": "Photographiez votre profil, vos tissus ou vos créations."
         }
       ],
       [
@@ -58,13 +92,20 @@
           "icon": "./assets/images/notification-icon.png",
           "color": "#B85C38",
           "defaultChannel": "messages",
-          "sounds": []
+          "sounds": ["./assets/sounds/order-ring.wav"]
         }
       ],
       "@react-native-vector-icons/feather"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8d72d86b-48a4-4fcd-b459-97ea2c87a8c6"
+      }
+    },
+    "owner": "ndom2504"
   }
 }
