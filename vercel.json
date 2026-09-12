@@ -1,26 +1,12 @@
 {
-  "installCommand": "pip install -r requirements.txt && npm ci --prefix website",
-  "buildCommand": "npm run build --prefix website && node scripts/sync-website-public.js",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
-  ],
-  "redirects": [
-    { "source": "/", "destination": "/fr/", "permanent": false },
-    { "source": "/app", "destination": "/fr/app/", "permanent": false },
-    { "source": "/app/", "destination": "/fr/app/", "permanent": false }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
-      ]
-    }
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/(.*)", "destination": "/api" }
   ],
   "functions": {
     "api/index.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "public/**"
     }
   }
 }

@@ -21,6 +21,7 @@ from routers import admin as admin_router
 from routers.admin import ensure_admin_user
 from routers.payments import OrderDraft, build_order_from_cart
 from storage import init_storage
+from marketing_static import is_marketing_path, maybe_serve_marketing
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("pagnemarket")
@@ -774,7 +775,16 @@ app.include_router(uploads_router.router)
 @app.middleware("http")
 async def vercel_api_prefix(request, call_next):
     path = request.scope.get("path") or ""
-    if path and not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc"):
+    # When Vercel catch-all sends HTML routes to FastAPI, serve the marketing site.
+    marketing = await maybe_serve_marketing(request)
+    if marketing is not None:
+        return marketing
+    if (
+        path
+        and not path.startswith("/api")
+        and path not in ("/docs", "/openapi.json", "/redoc")
+        and not is_marketing_path(path)
+    ):
         new_path = "/api" + (path if path.startswith("/") else f"/{path}")
         request.scope["path"] = new_path
         request.scope["raw_path"] = new_path.encode("utf-8")
