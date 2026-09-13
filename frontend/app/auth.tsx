@@ -1,7 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth";
+import { isAppleAuthAvailable, promptAppleSignIn } from "@/src/apple-auth";
 import { CityPicker } from "@/src/components/city-picker";
 import { CountryPicker } from "@/src/components/country-picker";
 import { DEFAULT_COUNTRY, formatPhone, type Country } from "@/src/countries";
@@ -34,7 +36,7 @@ const HERO =
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signIn, signUp, signInWithGoogle, sendOtp, verifyOtp } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithApple, sendOtp, verifyOtp } = useAuth();
   const googleReady = isGoogleAuthConfigured();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [method, setMethod] = useState<"otp" | "email">("otp");
@@ -51,9 +53,22 @@ export default function AuthScreen() {
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [role, setRole] = useState<RoleChoice>("buyer");
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [appleReady, setAppleReady] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const busy = googleLoading || submitLoading;
+  const busy = googleLoading || appleLoading || submitLoading;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ok = await isAppleAuthAvailable();
+      if (!cancelled) setAppleReady(ok);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const goHome = (roles?: string[]) => {
     router.replace(homeForRoles(roles?.length ? roles : [role]));
@@ -115,6 +130,31 @@ export default function AuthScreen() {
       setErr(e.message || "Connexion Google impossible");
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const onApple = async () => {
+    setErr(null);
+    if (!appleReady || busy) return;
+    if (mode === "register" && !requireRegisterLocation({ skipNames: true })) return;
+    setAppleLoading(true);
+    try {
+      const result = await promptAppleSignIn();
+      if (!result) {
+        setErr("Connexion Apple annulée");
+        return;
+      }
+      const u = await signInWithApple(result.identityToken, {
+        ...googleExtra(),
+        firstName: result.firstName || undefined,
+        lastName: result.lastName || undefined,
+        email: result.email || undefined,
+      });
+      goHome(u.roles);
+    } catch (e: any) {
+      setErr(e.message || "Connexion Apple impossible");
+    } finally {
+      setAppleLoading(false);
     }
   };
 
@@ -436,6 +476,24 @@ export default function AuthScreen() {
             )}
           </Pressable>
 
+          {appleReady ? (
+            <View style={styles.appleWrap} testID="auth-apple">
+              {appleLoading ? (
+                <View style={[styles.googleBtn, { backgroundColor: "#000" }]}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              ) : (
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                  cornerRadius={999}
+                  style={styles.appleBtn}
+                  onPress={onApple}
+                />
+              )}
+            </View>
+          ) : null}
+
           <View style={styles.orRow}>
             <View style={styles.orLine} />
             <Text style={styles.orText}>ou</Text>
@@ -597,6 +655,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   googleText: { color: colors.onSurface, fontWeight: "600", fontSize: 15 },
+  appleWrap: { marginTop: 10, marginBottom: 4 },
+  appleBtn: { width: "100%", height: 48 },
   orRow: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 12 },
   orLine: { flex: 1, height: 1, backgroundColor: colors.border },
   orText: { color: colors.muted, fontSize: 12 },

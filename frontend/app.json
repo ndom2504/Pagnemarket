@@ -11,6 +11,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.tissuehub.gpxlrs",
       "buildNumber": "1",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "CFBundleDisplayName": "PagneMarket",
         "NSCameraUsageDescription": "Photographiez votre profil, vos tissus ou vos créations.",
@@ -108,7 +109,8 @@
         }
       ],
       "@react-native-vector-icons/feather",
-      "expo-audio"
+      "expo-audio",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true
