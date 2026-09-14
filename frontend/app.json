@@ -104,7 +104,7 @@
           "color": "#B85C38",
           "defaultChannel": "messages",
           "sounds": [
-            "./assets/sounds/order-ring.wav"
+            "./assets/sounds/order_ring.wav"
           ]
         }
       ],

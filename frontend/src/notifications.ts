@@ -126,7 +126,7 @@ export async function playOrderRingtone() {
     });
     const player = createAudioPlayer(
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("../assets/sounds/order-ring.wav"),
+      require("../assets/sounds/order_ring.wav"),
     );
     player.volume = 1;
     player.play();
