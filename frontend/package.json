@@ -12,6 +12,7 @@
     "lint": "expo lint",
     "build:ios": "eas build --platform ios --profile production",
     "build:ios:preview": "eas build --platform ios --profile preview",
+    "build:android:preview": "eas build --platform android --profile preview",
     "submit:ios": "eas submit --platform ios --profile production --latest",
     "ship:ios": "eas build --platform ios --profile production --auto-submit"
   },
