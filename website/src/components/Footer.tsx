@@ -1,9 +1,9 @@
 import { AppQr, StoreBadges, TrackLink } from "@/components/Cta";
 import type { Dictionary } from "@/lib/content";
-import { SITE } from "@/lib/constants";
+import { SITE, type Locale } from "@/lib/constants";
 import type { ReactNode } from "react";
 
-export function Footer({ t }: { t: Dictionary }) {
+export function Footer({ t, locale }: { t: Dictionary; locale: Locale }) {
   return (
     <footer className="border-t border-sand bg-ink text-ivory">
       <div className="mx-auto grid max-w-content gap-12 px-5 py-16 md:grid-cols-2 md:px-8 lg:grid-cols-6">
@@ -51,7 +51,7 @@ export function Footer({ t }: { t: Dictionary }) {
 
         <FooterCol title={t.footer.support}>
           <a href="#faq">{t.footer.faq}</a>
-          <a href="#confidentialite">{t.footer.privacy}</a>
+          <a href={`/${locale}/privacy`}>{t.footer.privacy}</a>
           <a href="#conditions">{t.footer.terms}</a>
           <TrackLink href={`mailto:${SITE.contactEmail}`} event="contact_click">
             {t.footer.contact}

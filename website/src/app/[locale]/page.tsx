@@ -81,7 +81,7 @@ export default async function LocaleHome({
         <Hero t={t} />
         <Sections t={t} />
       </main>
-      <Footer t={t} />
+      <Footer locale={locale} t={t} />
       <StickyDownload t={t} />
     </>
   );
