@@ -60,6 +60,8 @@ async def current_user(cred: HTTPAuthorizationCredentials = Depends(security)) -
     user = await db.users.find_one({"id": uid}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    if user.get("status") == "deleted":
+        raise HTTPException(status_code=401, detail="Compte supprimé")
     return user
 
 

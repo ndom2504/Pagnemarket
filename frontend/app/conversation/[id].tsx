@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,9 +16,52 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { peerFromConversation } from "@/src/components/conversation-inbox";
+import { SafetyActionsModal } from "@/src/components/safety-actions-modal";
 import { Icon } from "@/src/icon";
 import { mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
+
+type Msg = {
+  id: string;
+  fromUserId: string;
+  text: string;
+  createdAt: string;
+};
+
+type Row =
+  | { type: "day"; id: string; label: string }
+  | { type: "msg"; id: string; msg: Msg };
+
+function dayKey(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "unknown";
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startMsg = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = Math.round((startToday.getTime() - startMsg.getTime()) / 86400000);
+  if (diff === 0) return "Aujourd’hui";
+  if (diff === 1) return "Hier";
+  return d.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+function roleLabel(roles?: string[]) {
+  const r = roles || [];
+  if (r.includes("supplier")) return "Fournisseur";
+  if (r.includes("tailor")) return "Tailleur";
+  if (r.includes("admin")) return "Support";
+  return "Client";
+}
 
 export default function ConversationScreen() {
   const insets = useSafeAreaInsets();
@@ -27,7 +70,7 @@ export default function ConversationScreen() {
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [text, setText] = useState("");
-  const listRef = useRef<FlatList>(null);
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   const conv = useQuery({
     queryKey: ["conversation", id],
@@ -41,11 +84,38 @@ export default function ConversationScreen() {
     refetchInterval: 4000,
   });
 
-  const other =
-    ((conv.data as any)?.participants as any[])?.find((p: any) => p.id !== user?.id) ||
-    (conv.data as any)?.participants?.[0];
+  const other = peerFromConversation((conv.data as any) || {}, user?.id);
   const isParticipant = ((conv.data as any)?.participantIds || []).includes(user?.id);
   const isAdminViewer = (user?.roles || []).includes("admin") && !isParticipant;
+
+  const chronological = ((messages.data as Msg[]) || []).slice().sort((a, b) => {
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+
+  /** Inverted FlatList: index 0 sits at the bottom → newest messages first. */
+  const rows: Row[] = useMemo(() => {
+    const newestFirst = chronological.slice().reverse();
+    const out: Row[] = [];
+    for (let i = 0; i < newestFirst.length; i++) {
+      const msg = newestFirst[i];
+      out.push({ type: "msg", id: msg.id, msg });
+      const cur = dayKey(msg.createdAt);
+      const older = newestFirst[i + 1];
+      const olderDay = older ? dayKey(older.createdAt) : null;
+      if (olderDay && olderDay !== cur) {
+        out.push({ type: "day", id: `day-${cur}-${i}`, label: dayLabel(msg.createdAt) });
+      }
+    }
+    if (newestFirst.length) {
+      const oldest = newestFirst[newestFirst.length - 1];
+      out.push({
+        type: "day",
+        id: `day-oldest-${dayKey(oldest.createdAt)}`,
+        label: dayLabel(oldest.createdAt),
+      });
+    }
+    return out;
+  }, [chronological]);
 
   const send = useMutation({
     mutationFn: async (body: string) => {
@@ -64,8 +134,6 @@ export default function ConversationScreen() {
     },
   });
 
-  const data = (messages.data as any[]) || [];
-
   useEffect(() => {
     if (!id || !isParticipant) return;
     api(`/conversations/${id}/read`, { method: "POST" })
@@ -75,13 +143,7 @@ export default function ConversationScreen() {
         qc.invalidateQueries({ queryKey: ["notifications"] });
       })
       .catch(() => {});
-  }, [id, isParticipant, data.length, qc]);
-
-  useEffect(() => {
-    if (data.length) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-    }
-  }, [data.length]);
+  }, [id, isParticipant, chronological.length, qc]);
 
   return (
     <KeyboardAvoidingView
@@ -100,41 +162,52 @@ export default function ConversationScreen() {
             <Text style={styles.avatarLetter}>{(other?.name || "?").charAt(0)}</Text>
           )}
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.title} numberOfLines={1}>
             {other?.name || "Conversation"}
           </Text>
           <Text style={styles.sub} numberOfLines={1}>
-            {(other?.roles || []).includes("supplier")
-              ? "Fournisseur"
-              : (other?.roles || []).includes("tailor")
-                ? "Tailleur"
-                : "Client"}
+            {roleLabel(other?.roles)}
           </Text>
         </View>
+        {other?.id && !isAdminViewer ? (
+          <Pressable testID="conv-safety" style={styles.iconBtn} onPress={() => setSafetyOpen(true)}>
+            <Icon name="more-horizontal" size={20} color={colors.onSurface} />
+          </Pressable>
+        ) : null}
       </View>
 
       {messages.isLoading || conv.isLoading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.brandPrimary} />
       ) : (
         <FlatList
-          ref={listRef}
-          data={data}
-          keyExtractor={(m) => m.id}
-          contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 12 }}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-          ListEmptyComponent={
-            <Text style={styles.empty}>Commencez la conversation.</Text>
-          }
+          inverted
+          data={rows}
+          keyExtractor={(r) => r.id}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            flexGrow: 1,
+            justifyContent: rows.length ? undefined : "center",
+          }}
+          ListEmptyComponent={<Text style={styles.empty}>Commencez la conversation.</Text>}
           renderItem={({ item }) => {
-            const mine = item.fromUserId === user?.id;
+            if (item.type === "day") {
+              return (
+                <View style={styles.dayWrap}>
+                  <Text style={styles.dayLabel}>{item.label}</Text>
+                </View>
+              );
+            }
+            const mine = item.msg.fromUserId === user?.id;
             return (
               <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
                 <Text style={[styles.bubbleText, mine && { color: colors.onSurfaceInverse }]}>
-                  {item.text}
+                  {item.msg.text}
                 </Text>
                 <Text style={[styles.time, mine && { color: "rgba(250,248,243,0.65)" }]}>
-                  {new Date(item.createdAt).toLocaleTimeString("fr-FR", {
+                  {new Date(item.msg.createdAt).toLocaleTimeString("fr-FR", {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
@@ -145,8 +218,8 @@ export default function ConversationScreen() {
         />
       )}
 
-      {!isAdminViewer && (
-        <View style={[styles.composer, { paddingBottom: insets.bottom + 10 }]}>
+      {!isAdminViewer ? (
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
           <TextInput
             testID="conv-input"
             style={styles.input}
@@ -169,14 +242,28 @@ export default function ConversationScreen() {
             )}
           </Pressable>
         </View>
-      )}
-      {isAdminViewer && (
-        <View style={[styles.composer, { paddingBottom: insets.bottom + 10 }]}>
+      ) : (
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
           <Text style={{ color: colors.muted, fontSize: 13, flex: 1, textAlign: "center" }}>
             Lecture seule (admin)
           </Text>
         </View>
       )}
+
+      {other?.id ? (
+        <SafetyActionsModal
+          visible={safetyOpen}
+          onClose={() => setSafetyOpen(false)}
+          userId={other.id}
+          targetType="user"
+          targetId={other.id}
+          targetLabel={other.name}
+          onBlocked={() => {
+            qc.invalidateQueries({ queryKey: ["conversations"] });
+            router.back();
+          }}
+        />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -188,8 +275,9 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 12,
     paddingBottom: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.divider,
+    backgroundColor: colors.surface,
   },
   iconBtn: {
     width: 40,
@@ -197,7 +285,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.surfaceTertiary,
+    backgroundColor: colors.surfaceSecondary,
   },
   headerAvatar: {
     width: 40,
@@ -212,13 +300,28 @@ const styles = StyleSheet.create({
   avatarLetter: { color: colors.onSurfaceInverse, fontWeight: "600" },
   title: { fontSize: 16, fontWeight: "600", color: colors.onSurface },
   sub: { fontSize: 12, color: colors.muted, marginTop: 1 },
-  empty: { textAlign: "center", color: colors.muted, marginTop: 40 },
+  empty: { textAlign: "center", color: colors.muted },
+  dayWrap: {
+    alignItems: "center",
+    marginVertical: 10,
+  },
+  dayLabel: {
+    fontSize: 11,
+    color: colors.muted,
+    backgroundColor: colors.surfaceSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: "hidden",
+    textTransform: "capitalize",
+  },
   bubble: {
     maxWidth: "82%",
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 16,
+    borderRadius: 18,
     gap: 4,
+    marginVertical: 3,
   },
   bubbleMine: {
     alignSelf: "flex-end",
@@ -228,7 +331,7 @@ const styles = StyleSheet.create({
   bubbleOther: {
     alignSelf: "flex-start",
     backgroundColor: colors.surfaceTertiary,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderBottomLeftRadius: 4,
   },
@@ -240,7 +343,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 12,
     paddingTop: 10,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,
     backgroundColor: colors.surface,
   },
@@ -252,7 +355,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: colors.surfaceTertiary,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     color: colors.onSurface,
     fontSize: 15,

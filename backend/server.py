@@ -28,6 +28,7 @@ from routers import ai_looks as ai_looks_router
 from routers import otp_auth as otp_auth_router
 from routers import apple_auth as apple_auth_router
 from routers import google_auth as google_auth_router
+from routers import safety as safety_router
 from routers import admin as admin_router
 from routers import tailor as tailor_router
 from routers.admin import ensure_admin_user
@@ -285,6 +286,10 @@ async def login(body: UserLogin):
     user = await db.users.find_one({"email": body.email.lower()}, {"_id": 0})
     if not user or not verify_password(body.password, user.get("passwordHash", "")):
         raise HTTPException(status_code=401, detail="Email ou mot de passe invalide")
+    if user.get("status") == "deleted":
+        raise HTTPException(status_code=401, detail="Ce compte a été supprimé")
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="Compte suspendu")
     return {"token": create_token(user["id"]), "user": user_public(user)}
 
 class UserUpdate(BaseModel):
@@ -516,7 +521,7 @@ async def list_products(
     usage: Optional[str] = None,
     supplierId: Optional[str] = None,
 ):
-    filters: list = []
+    filters: list = [{"hidden": {"$ne": True}}]
     if category and category != "all":
         filters.append({"category": category})
     if supplierId:
@@ -537,7 +542,7 @@ async def list_products(
     city_q = _city_clause(city)
     if city_q:
         filters.append(city_q)
-    query: dict = {"$and": filters} if len(filters) > 1 else (filters[0] if filters else {})
+    query: dict = {"$and": filters} if len(filters) > 1 else filters[0]
     cursor = db.products.find(query, {"_id": 0})
     if sort == "price_asc":
         cursor = cursor.sort("price", 1)
@@ -566,10 +571,13 @@ async def get_product(pid: str):
 
 @api_router.get("/creators")
 async def list_creators(country: Optional[str] = None):
-    query = _country_clause(country) or {}
+    query: dict = {"hidden": {"$ne": True}}
+    country_q = _country_clause(country)
+    if country_q:
+        query = {"$and": [query, country_q]}
     items = await db.creators.find(query, {"_id": 0}).to_list(100)
-    if not items and query:
-        items = await db.creators.find({}, {"_id": 0}).to_list(100)
+    if not items and country_q:
+        items = await db.creators.find({"hidden": {"$ne": True}}, {"_id": 0}).to_list(100)
     return [await _enrich_creator_card(c) for c in items]
 
 
@@ -781,10 +789,18 @@ def _unread_for(conv: dict, uid: str) -> int:
 
 @api_router.get("/conversations")
 async def list_conversations(user: dict = Depends(current_user)):
+    from routers.safety import blocked_ids_for
+
+    blocked = await blocked_ids_for(user["id"])
     convs = await db.conversations.find({"participantIds": user["id"]}, {"_id": 0}).sort("updatedAt", -1).to_list(100)
+    out = []
     for c in convs:
+        peers = [pid for pid in (c.get("participantIds") or []) if pid != user["id"]]
+        if any(pid in blocked for pid in peers):
+            continue
         c["unreadCount"] = _unread_for(c, user["id"])
-    return convs
+        out.append(c)
+    return out
 
 @api_router.get("/conversations/{conversation_id}")
 async def get_conversation(conversation_id: str, user: dict = Depends(current_user)):
@@ -816,6 +832,8 @@ async def mark_conversation_read(conversation_id: str, user: dict = Depends(curr
 
 @api_router.post("/messages/send")
 async def send_message(body: SendMessage, user: dict = Depends(current_user)):
+    from routers.safety import blocked_ids_for
+
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(400, "Message vide")
@@ -824,6 +842,9 @@ async def send_message(body: SendMessage, user: dict = Depends(current_user)):
 
     peer = await resolve_message_peer(body.toUserId)
     peer_id = peer["id"]
+    blocked = await blocked_ids_for(user["id"])
+    if peer_id in blocked:
+        raise HTTPException(403, "Impossible d’envoyer un message à cet utilisateur")
     me_p = _participant_payload(user)
     peer_p = _participant_payload(peer)
     if body.toName and body.toName.strip():
@@ -879,6 +900,7 @@ async def send_message(body: SendMessage, user: dict = Depends(current_user)):
     )
     msg.pop("_id", None)
     msg["toUserId"] = peer_id
+    msg["conversationId"] = conv_id
     return msg
 
 @api_router.get("/messages/{conversation_id}")
@@ -953,6 +975,7 @@ api_router.include_router(ai_looks_router.router)
 api_router.include_router(otp_auth_router.router)
 api_router.include_router(google_auth_router.router)
 api_router.include_router(apple_auth_router.router)
+api_router.include_router(safety_router.router)
 api_router.include_router(admin_router.router)
 api_router.include_router(tailor_router.router)
 app.include_router(api_router)

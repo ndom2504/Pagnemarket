@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
+import { SafetyActionsModal } from "@/src/components/safety-actions-modal";
 import { Icon } from "@/src/icon";
 import { cardPreviewUrl, mediaUrl } from "@/src/media";
 import { colors } from "@/src/theme";
@@ -29,6 +30,7 @@ export default function CreatorProfile() {
   const [msg, setMsg] = useState("");
   const [sent, setSent] = useState(false);
   const [orderSent, setOrderSent] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   const q = useQuery({ queryKey: ["creator", id], queryFn: () => api(`/creators/${id}`) });
   const send = useMutation({
@@ -103,6 +105,9 @@ export default function CreatorProfile() {
           <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
             <Pressable testID="creator-back" style={styles.iconBtn} onPress={() => router.back()}>
               <Icon name="arrow-left" size={20} color={colors.onSurfaceInverse} />
+            </Pressable>
+            <Pressable testID="creator-safety" style={styles.iconBtn} onPress={() => setSafetyOpen(true)}>
+              <Icon name="more-horizontal" size={20} color={colors.onSurfaceInverse} />
             </Pressable>
           </View>
         </View>
@@ -215,6 +220,16 @@ export default function CreatorProfile() {
           </View>
         </View>
       </ScrollView>
+
+      <SafetyActionsModal
+        visible={safetyOpen}
+        onClose={() => setSafetyOpen(false)}
+        userId={creator.userId || id}
+        targetType="creator"
+        targetId={String(id)}
+        targetLabel={creator.name}
+        onBlocked={() => router.back()}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -237,7 +252,16 @@ function TabBtn({ active, label, onPress, testID }: any) {
 }
 
 const styles = StyleSheet.create({
-  topBar: { position: "absolute", top: 0, left: 0, right: 0, paddingHorizontal: 16 },
+  topBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   iconBtn: {
     width: 40, height: 40, borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.15)",

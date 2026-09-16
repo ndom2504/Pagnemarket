@@ -19,6 +19,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "autoIncrement": true,
       "android": {
         "buildType": "apk"
       },
@@ -37,6 +38,9 @@
       "autoIncrement": true,
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "app-bundle"
       },
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://pagnemarket.vercel.app",

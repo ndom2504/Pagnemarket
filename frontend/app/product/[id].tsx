@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { AiLookStudio } from "@/src/components/ai-look-studio";
+import { SafetyActionsModal } from "@/src/components/safety-actions-modal";
 import { TailorSheet } from "@/src/components/tailor-sheet";
 import { Icon } from "@/src/icon";
 import { colors } from "@/src/theme";
@@ -33,6 +34,7 @@ export default function ProductDetail() {
   const [fav, setFav] = useState(false);
   const [tailorOpen, setTailorOpen] = useState(false);
   const [tailorGarment, setTailorGarment] = useState<string | undefined>();
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   const q = useQuery({ queryKey: ["product", id], queryFn: () => api(`/products/${id}`) });
   const reviews = useQuery({ queryKey: ["reviews", id], queryFn: () => api(`/products/${id}/reviews`, { auth: false }) });
@@ -97,9 +99,14 @@ export default function ProductDetail() {
             <Pressable testID="back-btn" style={styles.iconBtn} onPress={() => router.back()}>
               <Icon name="arrow-left" size={20} color={colors.onSurface} />
             </Pressable>
-            <Pressable testID="fav-btn" style={styles.iconBtn} onPress={() => toggleFav.mutate()}>
-              <Icon name="heart" size={20} color={fav ? colors.brandSecondary : colors.onSurface} />
-            </Pressable>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable testID="product-safety" style={styles.iconBtn} onPress={() => setSafetyOpen(true)}>
+                <Icon name="more-horizontal" size={20} color={colors.onSurface} />
+              </Pressable>
+              <Pressable testID="fav-btn" style={styles.iconBtn} onPress={() => toggleFav.mutate()}>
+                <Icon name="heart" size={20} color={fav ? colors.brandSecondary : colors.onSurface} />
+              </Pressable>
+            </View>
           </View>
           <View style={styles.dotsRow}>
             {(p.images || []).map((_: any, i: number) => (
@@ -266,6 +273,16 @@ export default function ProductDetail() {
         productName={p.name}
         garment={tailorGarment}
         onClose={() => setTailorOpen(false)}
+      />
+
+      <SafetyActionsModal
+        visible={safetyOpen}
+        onClose={() => setSafetyOpen(false)}
+        userId={p.supplierId}
+        targetType="product"
+        targetId={String(id)}
+        targetLabel={p.name}
+        onBlocked={() => router.back()}
       />
     </View>
   );

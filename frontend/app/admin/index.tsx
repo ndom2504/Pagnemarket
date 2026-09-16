@@ -534,14 +534,25 @@ export default function AdminDashboard() {
               {convsQ.isLoading ? (
                 <ActivityIndicator color={STATUS.blue} />
               ) : (
-                ((convsQ.data as any[]) || []).map((c) => (
-                  <Pressable key={c.id} onPress={() => router.push(`/conversation/${c.id}`)}>
-                    <Line
-                      title={((c.participants as any[]) || []).map((p) => p.name).join(" ↔ ") || "Conversation"}
-                      meta={c.lastMessage}
-                    />
-                  </Pressable>
-                ))
+                ((convsQ.data as any[]) || []).map((c) => {
+                  const parts = ((c.participants as any[]) || []).map((p) => p.name).filter(Boolean);
+                  const when = c.updatedAt
+                    ? new Date(c.updatedAt).toLocaleString("fr-FR", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "";
+                  return (
+                    <Pressable key={c.id} onPress={() => router.push(`/conversation/${c.id}`)}>
+                      <Line
+                        title={parts.length ? parts.join(" ↔ ") : "Conversation"}
+                        meta={`${c.lastMessage || "—"} · ${when}`}
+                      />
+                    </Pressable>
+                  );
+                })
               )}
             </Card>
           )}

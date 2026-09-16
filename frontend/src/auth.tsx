@@ -30,6 +30,7 @@ type Ctx = {
   sendOtp: (phone: string, countryIso?: string) => Promise<{ phone: string }>;
   verifyOtp: (data: any) => Promise<User>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refresh: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<User>;
 };
@@ -130,6 +131,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const deleteAccount = async () => {
+    await api("/auth/delete-account", {
+      method: "POST",
+      body: JSON.stringify({ confirm: "DELETE" }),
+    });
+    await setToken(null);
+    setUser(null);
+  };
+
   const updateProfile = async (data: Partial<User>) => {
     const me = await api<User>("/auth/me", {
       method: "PUT",
@@ -151,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sendOtp,
         verifyOtp,
         signOut,
+        deleteAccount,
         refresh,
         updateProfile,
       }}

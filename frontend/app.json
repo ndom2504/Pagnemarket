@@ -2,7 +2,7 @@
   "expo": {
     "name": "PagneMarket",
     "slug": "pagnemarket",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pagnemarket",
@@ -10,7 +10,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.tissuehub.gpxlrs",
-      "buildNumber": "1",
       "usesAppleSignIn": true,
       "infoPlist": {
         "CFBundleDisplayName": "PagneMarket",
@@ -60,7 +59,6 @@
         "backgroundColor": "#000000"
       },
       "package": "com.emergent.tissuehub.gpxlrs",
-      "versionCode": 1,
       "permissions": [
         "CAMERA",
         "READ_MEDIA_IMAGES",

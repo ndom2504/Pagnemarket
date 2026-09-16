@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
     "preinstall": "node ./scripts/cmd-guard.js --preinstall",
     "start": "expo start",
@@ -13,6 +13,8 @@
     "build:ios": "eas build --platform ios --profile production",
     "build:ios:preview": "eas build --platform ios --profile preview",
     "build:android:preview": "eas build --platform android --profile preview",
+    "build:all:preview": "eas build --platform all --profile preview",
+    "build:all": "eas build --platform all --profile production",
     "submit:ios": "eas submit --platform ios --profile production --latest",
     "ship:ios": "eas build --platform ios --profile production --auto-submit"
   },
