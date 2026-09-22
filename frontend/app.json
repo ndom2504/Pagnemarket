@@ -2,7 +2,7 @@
   "expo": {
     "name": "PagneMarket",
     "slug": "pagnemarket",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pagnemarket",
@@ -82,7 +82,13 @@
           "backgroundColor": "#000000"
         }
       ],
-      "expo-video",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ],
       "expo-font",
       "expo-image",
       "expo-secure-store",
@@ -107,7 +113,13 @@
         }
       ],
       "@react-native-vector-icons/feather",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
       "expo-apple-authentication"
     ],
     "experiments": {

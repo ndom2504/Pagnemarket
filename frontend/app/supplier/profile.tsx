@@ -50,6 +50,7 @@ export default function SupplierProfile() {
         <MenuRow icon="grid" label="Mes tissus" onPress={() => router.push("/supplier/products")} />
         <MenuRow icon="plus" label="Ajouter un tissu" onPress={() => router.push("/supplier/product-form")} />
         <MenuRow icon="log-out" label="Se déconnecter" onPress={leave} danger />
+        <MenuRow icon="trash-2" label="Supprimer mon compte" onPress={() => router.push("/settings")} danger />
       </View>
     </ScrollView>
   );

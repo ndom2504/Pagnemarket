@@ -11,20 +11,54 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { Icon } from "@/src/icon";
+import { requireAuth } from "@/src/require-auth";
 import { colors } from "@/src/theme";
 
 export default function Cart() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["cart"], queryFn: () => api("/cart") });
+  const q = useQuery({
+    queryKey: ["cart"],
+    queryFn: () => api("/cart"),
+    enabled: !!user,
+  });
 
   const update = useMutation({
     mutationFn: (v: { productId: string; quantity: number }) =>
       api("/cart/update", { method: "POST", body: JSON.stringify(v) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cart"] }),
   });
+
+  if (!user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.surface }}>
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <Pressable testID="cart-back" style={styles.iconBtn} onPress={() => router.back()}>
+            <Icon name="arrow-left" size={20} color={colors.onSurface} />
+          </Pressable>
+          <Text style={styles.title}>Mon panier</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
+          <Icon name="shopping-bag" size={36} color={colors.muted} />
+          <Text style={{ color: colors.onSurface, fontSize: 16, fontWeight: "600", textAlign: "center" }}>
+            Connectez-vous pour voir votre panier
+          </Text>
+          <Pressable
+            testID="cart-login"
+            style={styles.cta}
+            onPress={() => requireAuth(null, router)}
+          >
+            <Text style={styles.ctaText}>Se connecter</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   if (q.isLoading) {
     return (

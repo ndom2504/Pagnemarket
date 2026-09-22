@@ -16,14 +16,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { SafetyActionsModal } from "@/src/components/safety-actions-modal";
 import { Icon } from "@/src/icon";
 import { cardPreviewUrl, mediaUrl } from "@/src/media";
+import { requireAuth } from "@/src/require-auth";
 import { colors } from "@/src/theme";
 
 export default function CreatorProfile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tab, setTab] = useState<"models" | "bio">("models");
@@ -32,9 +35,10 @@ export default function CreatorProfile() {
   const [orderSent, setOrderSent] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
 
-  const q = useQuery({ queryKey: ["creator", id], queryFn: () => api(`/creators/${id}`) });
+  const q = useQuery({ queryKey: ["creator", id], queryFn: () => api(`/creators/${id}`, { auth: false }) });
   const send = useMutation({
     mutationFn: (text: string) => {
+      if (!requireAuth(user, router)) return Promise.reject(new Error("auth"));
       const toUserId = q.data?.creator?.userId || id;
       return api("/messages/send", {
         method: "POST",
@@ -53,8 +57,9 @@ export default function CreatorProfile() {
   });
 
   const requestSew = useMutation({
-    mutationFn: (modelId?: string) =>
-      api("/sewing-requests", {
+    mutationFn: (modelId?: string) => {
+      if (!requireAuth(user, router)) return Promise.reject(new Error("auth"));
+      return api("/sewing-requests", {
         method: "POST",
         body: JSON.stringify({
           creatorId: id,
@@ -63,7 +68,8 @@ export default function CreatorProfile() {
           title: "Demande de confection",
           notes: msg.trim() || null,
         }),
-      }),
+      });
+    },
     onSuccess: () => {
       setOrderSent(true);
       setMsg("");
@@ -106,7 +112,10 @@ export default function CreatorProfile() {
             <Pressable testID="creator-back" style={styles.iconBtn} onPress={() => router.back()}>
               <Icon name="arrow-left" size={20} color={colors.onSurfaceInverse} />
             </Pressable>
-            <Pressable testID="creator-safety" style={styles.iconBtn} onPress={() => setSafetyOpen(true)}>
+            <Pressable testID="creator-safety" style={styles.iconBtn} onPress={() => {
+              if (!requireAuth(user, router)) return;
+              setSafetyOpen(true);
+            }}>
               <Icon name="more-horizontal" size={20} color={colors.onSurfaceInverse} />
             </Pressable>
           </View>

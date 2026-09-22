@@ -118,7 +118,7 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
       </View>
       {error && <Text style={styles.err}>{error}</Text>}
 
-      <Modal visible={!!explain} transparent animationType="fade" onRequestClose={() => setExplain(null)}>
+      <Modal visible={!!explain} transparent animationType="fade" onRequestClose={confirmExplain}>
         <View style={styles.backdropCenter}>
           <View style={styles.dialog}>
             <View style={styles.dialogIcon}>
@@ -134,9 +134,6 @@ export function AvatarPicker({ uri, initials, onChange }: Props) {
             </Text>
             <Pressable testID="avatar-perm-continue" style={styles.dialogBtn} onPress={confirmExplain}>
               <Text style={styles.dialogBtnTxt}>Continuer</Text>
-            </Pressable>
-            <Pressable onPress={() => setExplain(null)} style={{ padding: 10 }}>
-              <Text style={{ color: colors.muted }}>Plus tard</Text>
             </Pressable>
           </View>
         </View>

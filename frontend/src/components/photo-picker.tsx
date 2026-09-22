@@ -178,8 +178,8 @@ export function PhotoPicker({ images, onChange, max = 5, variant = "grid", fallb
         </Pressable>
       </Modal>
 
-      {/* Pre-permission explanation */}
-      <Modal visible={!!explain} transparent animationType="fade" onRequestClose={() => setExplain(null)}>
+      {/* Pre-permission explanation — Continuer always proceeds to the system prompt (Guideline 5.1.1iv) */}
+      <Modal visible={!!explain} transparent animationType="fade" onRequestClose={confirmExplain}>
         <View style={styles.backdropCenter}>
           <View style={styles.dialog}>
             <View style={styles.dialogIcon}>
@@ -199,9 +199,6 @@ export function PhotoPicker({ images, onChange, max = 5, variant = "grid", fallb
             </Text>
             <Pressable testID="perm-continue" style={styles.dialogBtn} onPress={confirmExplain}>
               <Text style={styles.dialogBtnTxt}>Continuer</Text>
-            </Pressable>
-            <Pressable onPress={() => setExplain(null)} style={{ padding: 10 }}>
-              <Text style={{ color: colors.muted }}>Plus tard</Text>
             </Pressable>
           </View>
         </View>

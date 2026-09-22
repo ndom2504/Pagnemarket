@@ -29,6 +29,6 @@ export default function Index() {
       </View>
     );
   }
-  if (!user) return <Redirect href="/auth" />;
+  if (!user) return <Redirect href="/(tabs)" />;
   return <Redirect href={homeForRoles(user.roles)} />;
 }

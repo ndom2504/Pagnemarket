@@ -2,12 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import {
+  ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
 import { useAuth } from "@/src/auth";
@@ -21,7 +24,8 @@ const AVATAR: string | undefined = undefined;
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, signOut, deleteAccount } = useAuth();
+  const [deleting, setDeleting] = useState(false);
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api("/orders"), enabled: !!user });
   const favs = useQuery({ queryKey: ["favorites"], queryFn: () => api("/favorites"), enabled: !!user });
   const isSupplier = !!user?.roles?.includes("supplier");
@@ -32,11 +36,68 @@ export default function Profile() {
     router.replace("/auth");
   };
 
+  const confirmDelete = () => {
+    Alert.alert(
+      "Supprimer mon compte",
+      "Cette action est définitive. Vos données personnelles seront anonymisées et vous serez déconnecté.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Continuer",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Confirmer la suppression",
+              "Appuyez sur « Supprimer définitivement » pour valider.",
+              [
+                { text: "Annuler", style: "cancel" },
+                {
+                  text: "Supprimer définitivement",
+                  style: "destructive",
+                  onPress: async () => {
+                    setDeleting(true);
+                    try {
+                      await deleteAccount();
+                      router.replace("/auth");
+                    } catch (e: any) {
+                      Alert.alert("Erreur", e.message || "Suppression impossible");
+                    } finally {
+                      setDeleting(false);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{ paddingBottom: 32 }}
     >
+      {!user ? (
+        <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
+          <View style={[styles.avatar, styles.avatarFallback]}>
+            <Text style={styles.avatarInitial}>P</Text>
+          </View>
+          <View style={{ flex: 1, gap: 8 }}>
+            <Text style={styles.name}>Bienvenue</Text>
+            <Text style={styles.email}>Parcourez la boutique sans compte. Connectez-vous pour commander, messager ou gérer vos favoris.</Text>
+            <Pressable
+              testID="profile-login"
+              style={styles.smallCta}
+              onPress={() => router.push("/auth")}
+            >
+              <Text style={styles.smallCtaText}>Se connecter / S’inscrire</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+      <>
       <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
         <Pressable testID="profile-avatar" onPress={() => router.push("/settings")}>
           {user?.avatarUrl || user?.avatar || AVATAR ? (
@@ -74,7 +135,11 @@ export default function Profile() {
           </View>
         </View>
       </View>
+      </>
+      )}
 
+      {user ? (
+      <>
       {/* Stats */}
       <View style={styles.stats}>
         <View style={styles.stat}>
@@ -175,7 +240,21 @@ export default function Profile() {
         <MenuRow icon="map-pin" label="Mes adresses" onPress={() => router.push("/settings")} testID="menu-addresses" />
         <MenuRow icon="settings" label="Paramètres du compte" onPress={() => router.push("/settings")} testID="menu-settings" />
         <MenuRow icon="log-out" label="Se déconnecter" onPress={handleSignOut} testID="menu-signout" danger />
+        <MenuRow
+          icon="trash-2"
+          label={deleting ? "Suppression…" : "Supprimer mon compte"}
+          onPress={confirmDelete}
+          testID="menu-delete-account"
+          danger
+          disabled={deleting}
+        />
       </View>
+      </>
+      ) : (
+        <View style={{ paddingHorizontal: 16, marginTop: 24 }}>
+          <MenuRow icon="shopping-bag" label="Explorer la boutique" onPress={() => router.push("/(tabs)/shop")} testID="menu-guest-shop" />
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -199,20 +278,26 @@ function MenuRow({
   onPress,
   testID,
   danger,
+  disabled,
 }: {
   icon: any;
   label: string;
   onPress: () => void;
   testID?: string;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <Pressable testID={testID} onPress={onPress} style={styles.menuRow}>
+    <Pressable testID={testID} onPress={onPress} style={[styles.menuRow, disabled && { opacity: 0.5 }]} disabled={disabled}>
       <View style={[styles.menuIcon, danger && { backgroundColor: colors.brandSecondary }]}>
         <Icon name={icon} size={16} color={danger ? colors.onBrandSecondary : colors.onSurface} />
       </View>
       <Text style={[styles.menuLabel, danger && { color: colors.brandSecondary }]}>{label}</Text>
-      <Icon name="chevron-right" size={18} color={colors.muted} />
+      {disabled ? (
+        <ActivityIndicator size="small" color={colors.brandSecondary} />
+      ) : (
+        <Icon name="chevron-right" size={18} color={colors.muted} />
+      )}
     </Pressable>
   );
 }

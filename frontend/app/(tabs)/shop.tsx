@@ -51,7 +51,11 @@ export default function Shop() {
   );
 
   useEffect(() => {
-    if (countryReady || !user) return;
+    if (countryReady) return;
+    if (!user) {
+      setCountryReady(true);
+      return;
+    }
     if (user.country) {
       setCountry(countryByName(user.country));
       if (user.city) setCity(user.city);

@@ -315,7 +315,10 @@ export default function SettingsScreen() {
           <Icon name="external-link" size={16} color={colors.muted} />
         </Pressable>
 
-        <Text style={styles.section}>Zone de danger</Text>
+        <Text style={[styles.section, { color: colors.error }]}>Zone de danger</Text>
+        <Text style={styles.hint}>
+          La suppression anonymise vos données personnelles. Cette action est irréversible.
+        </Text>
         <Pressable
           testID="settings-delete-account"
           style={[styles.deleteBtn, deleting && { opacity: 0.6 }]}

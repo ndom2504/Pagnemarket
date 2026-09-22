@@ -18,15 +18,18 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, formatXAF } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { AiLookStudio } from "@/src/components/ai-look-studio";
 import { SafetyActionsModal } from "@/src/components/safety-actions-modal";
 import { TailorSheet } from "@/src/components/tailor-sheet";
 import { Icon } from "@/src/icon";
+import { requireAuth } from "@/src/require-auth";
 import { colors } from "@/src/theme";
 
 export default function ProductDetail() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
@@ -100,10 +103,24 @@ export default function ProductDetail() {
               <Icon name="arrow-left" size={20} color={colors.onSurface} />
             </Pressable>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <Pressable testID="product-safety" style={styles.iconBtn} onPress={() => setSafetyOpen(true)}>
+              <Pressable
+                testID="product-safety"
+                style={styles.iconBtn}
+                onPress={() => {
+                  if (!requireAuth(user, router)) return;
+                  setSafetyOpen(true);
+                }}
+              >
                 <Icon name="more-horizontal" size={20} color={colors.onSurface} />
               </Pressable>
-              <Pressable testID="fav-btn" style={styles.iconBtn} onPress={() => toggleFav.mutate()}>
+              <Pressable
+                testID="fav-btn"
+                style={styles.iconBtn}
+                onPress={() => {
+                  if (!requireAuth(user, router)) return;
+                  toggleFav.mutate();
+                }}
+              >
                 <Icon name="heart" size={20} color={fav ? colors.brandSecondary : colors.onSurface} />
               </Pressable>
             </View>
@@ -153,6 +170,7 @@ export default function ProductDetail() {
                 testID="contact-supplier"
                 style={styles.followBtn}
                 onPress={() => {
+                  if (!requireAuth(user, router)) return;
                   api("/messages/send", {
                     method: "POST",
                     body: JSON.stringify({
@@ -244,7 +262,10 @@ export default function ProductDetail() {
           <Pressable
             testID="add-to-cart"
             style={styles.addCart}
-            onPress={() => addToCart.mutate()}
+            onPress={() => {
+              if (!requireAuth(user, router)) return;
+              addToCart.mutate();
+            }}
           >
             {addToCart.isPending ? (
               <ActivityIndicator color={colors.onBrandPrimary} />
@@ -259,6 +280,7 @@ export default function ProductDetail() {
             testID="buy-now"
             style={styles.buyNow}
             onPress={async () => {
+              if (!requireAuth(user, router)) return;
               await addToCart.mutateAsync();
               router.push("/cart");
             }}
